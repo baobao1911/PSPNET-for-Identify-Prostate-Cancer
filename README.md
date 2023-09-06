@@ -1,1 +1,1 @@
-# PSPNET-for-Identify-Prostate-Cancer
+# Multi-scale parallel branch for segmentation Prostate Cancer
