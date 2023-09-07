@@ -12,14 +12,9 @@ Task 2: Core-level Gleason score prediction
 In this project, i will process to solve task 1. Task 1 is regarded as a segmentation task so i will use Semantic Segmentation models with first branch is a PSPNET and second branch is a FC-densenet, after that i will concat 2 branch and some conv layers to get output.
 
 ## Preprocessing
-<<<<<<< Updated upstream
-Data used in this challenge consists of a set of tissue micro-array (TMA) images. Each TMA image is annotated in detail by several expert pathologists. So i use Majority-Voting to get GroundTruth
-[(Download Data)](https://gleason2019.grand-challenge.org/Register/)
-=======
 Data used in this challenge consists of a set of tissue micro-array (TMA) images. Each TMA image is annotated in detail by several expert pathologists. So i use Majority-Voting to get GroundTruth.
 [*Download here*](https://gleason2019.grand-challenge.org/Register/)
 
->>>>>>> Stashed changes
 ![image](https://github.com/baobao1911/Semantic_Segmentation_for_Prostate_Cancer_Detection/assets/79504672/bee8587b-204e-44b6-b36f-d6031523142b)
 
 ## Proposed Model
