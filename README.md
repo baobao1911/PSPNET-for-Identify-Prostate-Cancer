@@ -13,7 +13,7 @@ In this project, i will process to solve task 1. Task 1 is regarded as a segment
 
 ## Preprocessing
 Data used in this challenge consists of a set of tissue micro-array (TMA) images. Each TMA image is annotated in detail by several expert pathologists. So i use Majority-Voting to get GroundTruth
-
+[(Download Data)](https://gleason2019.grand-challenge.org/Register/)
 ![image](https://github.com/baobao1911/Semantic_Segmentation_for_Prostate_Cancer_Detection/assets/79504672/bee8587b-204e-44b6-b36f-d6031523142b)
 
 ## Proposed Model
