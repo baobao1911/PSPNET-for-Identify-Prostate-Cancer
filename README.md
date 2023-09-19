@@ -18,6 +18,3 @@ Data used in this challenge consists of a set of tissue micro-array (TMA) images
 ![image](https://github.com/baobao1911/Semantic_Segmentation_for_Prostate_Cancer_Detection/assets/79504672/bee8587b-204e-44b6-b36f-d6031523142b)
 
 ## Proposed Model
-
-![image](https://github.com/baobao1911/Semantic_Segmentation_for_Prostate_Cancer_Detection/assets/79504672/fcf44b22-fc66-4766-9d5e-27b7cf3e6802)
-
