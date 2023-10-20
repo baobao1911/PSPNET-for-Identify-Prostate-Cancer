@@ -1,0 +1,64 @@
+import torch
+from GleasonData.Gleason import Gleason
+import albumentations as albu
+from albumentations.pytorch import ToTensorV2
+
+
+def intersectionAndUnionGPU(output, target, K, ignore_index=255):
+    # 'K' classes, output and target sizes are N or N * L or N * H * W, each value in range 0 to K - 1.
+    assert output.shape == target.shape
+    output = output.view(-1)
+    target = target.view(-1)
+    output[target == ignore_index] = ignore_index
+    intersection = output[output == target]
+    area_intersection = torch.histc(intersection, bins=K, min=0, max=K-1)
+    area_output = torch.histc(output, bins=K, min=0, max=K-1)
+    area_target = torch.histc(target, bins=K, min=0, max=K-1)
+    area_union = area_output + area_target - area_intersection
+    return area_intersection, area_union, area_target
+
+def get_dataset(img_path, mask_path, augmentation=None, preprocessing=None, test=False):
+    dataset = Gleason(img_path, mask_path, augmentation=augmentation, 
+                      preprocessing=preprocessing, test=test)
+    return dataset
+
+Augmentation = albu.Compose([
+    albu.HorizontalFlip(p=0.5),
+    albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.7, border_mode=0),
+    albu.VerticalFlip(p=0.5),
+    albu.RandomGridShuffle(grid=(3, 3), p=0.2),
+    #albu.PadIfNeeded(min_height=320, min_width=320, always_apply=True, border_mode=0),
+    #albu.RandomCrop(height=256, width=256, p=0.7),
+    albu.PadIfNeeded(min_height=256, min_width=256, p=0.7, border_mode=0),
+    #albu.RandomCrop(height=256, width=256, always_apply=True),
+])
+
+
+Transform = albu.Compose([
+    albu.Resize(width=480, height=480, always_apply=True),
+    albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
+    ToTensorV2(),
+])
+
+
+def poly_learning_rate(base_lr, curr_iter, max_iter, power=0.9):
+    """poly learning rate policy"""
+    lr = base_lr * (1 - float(curr_iter) / max_iter) ** power
+    return lr
+
+
+class AverageMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
