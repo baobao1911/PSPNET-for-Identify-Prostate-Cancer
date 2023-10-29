@@ -1,8 +1,6 @@
 import torch
 from GleasonData.Gleason import Gleason
-import albumentations as albu
-from albumentations.pytorch import ToTensorV2
-
+import DataTransforms as Transfroms
 
 def intersectionAndUnionGPU(output, target, K, ignore_index=255):
     # 'K' classes, output and target sizes are N or N * L or N * H * W, each value in range 0 to K - 1.
@@ -21,25 +19,6 @@ def get_dataset(img_path, mask_path, augmentation=None, preprocessing=None, test
     dataset = Gleason(img_path, mask_path, augmentation=augmentation, 
                       preprocessing=preprocessing, test=test)
     return dataset
-
-Augmentation = albu.Compose([
-    albu.HorizontalFlip(p=0.5),
-    albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.7, border_mode=0),
-    albu.VerticalFlip(p=0.5),
-    albu.RandomGridShuffle(grid=(3, 3), p=0.2),
-    #albu.PadIfNeeded(min_height=320, min_width=320, always_apply=True, border_mode=0),
-    #albu.RandomCrop(height=256, width=256, p=0.7),
-    albu.PadIfNeeded(min_height=256, min_width=256, p=0.7, border_mode=0),
-    #albu.RandomCrop(height=256, width=256, always_apply=True),
-])
-
-
-Transform = albu.Compose([
-    albu.Resize(width=480, height=480, always_apply=True),
-    albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
-    ToTensorV2(),
-])
-
 
 def poly_learning_rate(base_lr, curr_iter, max_iter, power=0.9):
     """poly learning rate policy"""
@@ -62,3 +41,22 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+def get_transforms(train):
+    base_size = 1000
+    crop_size = 768
+
+    min_size = int((0.5 if train else 1.0) * base_size)
+    max_size = int((2.0 if train else 1.0) * base_size)
+    transforms = []
+    transforms.append(Transfroms.RandomResize(min_size, max_size))
+    if train:
+        transforms.append(Transfroms.RandomHorizontalFlip(0.5))
+        transforms.append(Transfroms.ColorJitter(0.5, 0.5, 0.5, 0.5))
+        transforms.append(Transfroms.RandomVerticalFlip(0.5))
+        transforms.append(Transfroms.RandomCrop(crop_size))
+    transforms.append(Transfroms.ToTensor())
+    transforms.append(Transfroms.Normalize(mean=[0.485, 0.456, 0.406],
+                                  std=[0.229, 0.224, 0.225]))
+
+    return Transfroms.Compose(transforms)

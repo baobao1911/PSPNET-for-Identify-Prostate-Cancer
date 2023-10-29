@@ -7,7 +7,7 @@ import csv
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from Model.FuckingModel import MyModel
-from Utils.utils import intersectionAndUnionGPU, get_dataset, Augmentation, Transform, poly_learning_rate, AverageMeter
+from Utils.utils import intersectionAndUnionGPU, get_dataset, get_transforms, AverageMeter
 
 ################################################################################################################################################
 def model_training(train_img_path, train_mask_path,
@@ -17,9 +17,9 @@ def model_training(train_img_path, train_mask_path,
                    model_checkpint_path, result_path):
     # 1. Create dataset
     train_dataset = get_dataset(train_img_path, train_mask_path, augmentation=None, 
-                      preprocessing=Transform, test=False)
+                      preprocessing=get_transforms(train=True), test=False)
     val_dataset = get_dataset(val_img_path, val_mask_path, augmentation=None,
-                              preprocessing=Transform, test=False)
+                              preprocessing=get_transforms(train=False), test=False)
     
 
 
