@@ -9,8 +9,7 @@ This challenge will provide a unique dataset and evaluation framework for the im
 Task 1: Pixel-level Gleason grade prediction
 Task 2: Core-level Gleason score prediction
 
-In this project, i will process to solve task 1. Task 1 is regarded as a segmentation task so i will use Semantic Segmentation models with first branch is a PSPNET and second branch is a FC-densenet, after that i will concat 2 branch and some conv layers to get output.
-
+In this project, i will process to solve task 1.
 ## Preprocessing
 Data used in this challenge consists of a set of tissue micro-array (TMA) images. Each TMA image is annotated in detail by several expert pathologists. So i use Majority-Voting to get GroundTruth.
 [*Download here*](https://gleason2019.grand-challenge.org/Register/)
