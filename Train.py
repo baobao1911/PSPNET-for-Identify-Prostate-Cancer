@@ -7,7 +7,7 @@ import csv
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from Model.FuckingModel import MyModel
-from Utils.utils import intersectionAndUnionGPU, get_dataset, get_transforms, AverageMeter
+from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, Collate_fn, poly_learning_rate
 
 ################################################################################################################################################
 def model_training(train_img_path, train_mask_path,
@@ -16,15 +16,13 @@ def model_training(train_img_path, train_mask_path,
                    epochs, base_lr, 
                    model_checkpint_path, result_path):
     # 1. Create dataset
-    train_dataset = get_dataset(train_img_path, train_mask_path, augmentation=None, 
-                      preprocessing=get_transforms(train=True), test=False)
-    val_dataset = get_dataset(val_img_path, val_mask_path, augmentation=None,
-                              preprocessing=get_transforms(train=False), test=False)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False)
     
 
 
     # 3. Create data loaders
-    train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_s, shuffle=True, 
+    train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_s, shuffle=True,
                             num_workers=n_workers, persistent_workers=True, 
                             drop_last=True, pin_memory=True)
     val_data_loader = DataLoader(dataset=val_dataset, batch_size=batch_s, shuffle=True, 
@@ -51,24 +49,29 @@ def model_training(train_img_path, train_mask_path,
     # 4. Set up the optimizer, the learning rate scheduler and the loss scaling for AMP
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'device used: {device}')
-    #                                                          background     begin    gleason 5      gleason 3   gleason 4 
-    criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.49666363, 2.05586943, 16.13300493,  0.98972499,  0.70038494]), ignore_index=255).to(device)
 
-    model = MyModel(n_classes=n_classes, zoom_factor=8, loss=criterion).to(device)
+    class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
+    loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
+    alpha=0.25
+    gamma=2
+
+
+    model = MyModel(n_classes=n_classes, zoom_factor=8, loss=loss_fn).to(device)
     modules_ori = [model.block, model.block0, model.block1, model.block2, model.block3, model.block4, model.block5,  model.block6,  
                    model.block7,  model.block8,  model.block9,  model.block10, model.block11,  model.block12, model.block13, 
                    model.block14, model.block15, model.block16, model.block17, model.block18, model.block19, model.block20, model.block21]
     modules_new = [model.ppm, model.conv_ppm, model.aux, model.shallow_features, model.final_conv]
+
     params_list = []
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr * 5))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*2))
 
-    optimizer = torch.optim.RMSprop(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=2, min_lr=0.001)
 
-    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=2, verbose=False)
+
     ep = 1
     scaler = torch.cuda.amp.GradScaler()
 
@@ -78,11 +81,12 @@ def model_training(train_img_path, train_mask_path,
                                 map_location = lambda storage, loc: storage.cuda(dev))     
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        scheduler.load_state_dict(checkpoint['scheduler']) 
+        #scheduler.load_state_dict(checkpoint['scheduler']) 
         ep = checkpoint["epoch"]
         scaler.load_state_dict(checkpoint["scaler"])
         epochs = ep + epochs
         ep +=1
+        print('>> loading information....')
 
         data = np.genfromtxt(result_path, delimiter=',', dtype=float)
         train_loss = data[0].tolist()
@@ -97,17 +101,10 @@ def model_training(train_img_path, train_mask_path,
 
     # 5. Begin training
     start_time = time.time()
-    for epoch in range(ep, epochs+1):
-        print(f'Current epoch: [{epoch} / {epochs}]')
-        if epoch == 30:
-            train_dataset = get_dataset(train_img_path, train_mask_path, augmentation=Augmentation, 
-                preprocessing=Transform, test=False)
-            train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_s, shuffle=True, 
-                                            num_workers=n_workers, persistent_workers=True, 
-                                            drop_last=True, pin_memory=True)
-            print(f'Begin agumentation on train dataset')
+    for epoch in range(ep, epochs):
+        print(f'Current >> [epoch: {epoch}/ {epochs}, LR: {optimizer.param_groups[0]["lr"]}]')
             
-        print(f'>> Start Training with lr {optimizer.param_groups[0]["lr"]:.8f}.............')
+        print(f'>> Start Training .............')
         t_main_loss_meter.reset()
         t_loss_meter.reset()
         t_intersection_meter.reset()
@@ -119,32 +116,40 @@ def model_training(train_img_path, train_mask_path,
             for param in model.parameters():
                 param.grad = None
             input = input.to(device).float()
+            #print(target.min(), target.max())
             target = target.to(device).long()
+
             with torch.cuda.amp.autocast():
                 output, main_loss, aux_loss = model(input, target)
-                loss = main_loss + aux_loss*0.4
+                pt_main = torch.exp(-main_loss)
+                focal_loss_main = (alpha * (1-pt_main)**gamma * main_loss).mean()
+                
+                pt_aux = torch.exp(-aux_loss)
+                focal_loss_aux = (alpha * (1-pt_aux)**gamma * aux_loss).mean()
+
+                loss = focal_loss_main + focal_loss_aux*0.4
+                #print(loss.item())
                 
             scaler.scale(loss).backward() #loss.backward()
             # weights update
-            if (batch_id) % 4 == 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer) # optimizer.step()
-                scaler.update()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer) # optimizer.step()
+            scaler.update()
 
             with torch.no_grad():
-                t_main_loss_meter.update(main_loss.item(), batch_s)
+                t_main_loss_meter.update(focal_loss_main.item(), batch_s)
                 t_loss_meter.update(loss.item(), batch_s)
                 intersection, union, target = intersectionAndUnionGPU(output.float(), target.float(), n_classes, 255)
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
                 t_intersection_meter.update(intersection, batch_s), t_union_meter.update(union, batch_s), t_target_meter.update(target, batch_s)
 
-            current_iter = epoch * len(train_data_loader) + batch_id
+            current_iter = epoch * len(train_data_loader) + batch_id + 1
             current_lr = poly_learning_rate(base_lr, current_iter, max_iter, power=0.9)
-            for index in range(0, 23):
+            for index in range(0, 22):
                 optimizer.param_groups[index]['lr'] = current_lr
-            for index in range(23, len(optimizer.param_groups)):
-                optimizer.param_groups[index]['lr'] = current_lr * 5
+            for index in range(22, len(optimizer.param_groups)):
+                optimizer.param_groups[index]['lr'] = current_lr * 2
 
         with torch.no_grad():
             t_iou_class = t_intersection_meter.sum / (t_union_meter.sum + 1e-10)
@@ -171,11 +176,12 @@ def model_training(train_img_path, train_mask_path,
                 label = label.to(device).long()
                 with torch.cuda.amp.autocast():
                     output = model(input)
-                    loss = criterion(output, label)
+                    loss = loss_fn(output, label)
+                    pt = torch.exp(-loss)
+                    focal_loss = (alpha * (1-pt)**gamma * loss).mean()
                 
-                v_loss_meter.update(loss.item(), batch_s)
+                v_loss_meter.update(focal_loss.item(), batch_s)
                 output = output.max(1)[1]
-
                 intersection, union, target = intersectionAndUnionGPU(output, label, n_classes, 255)
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
                 v_intersection_meter.update(intersection, batch_s), v_union_meter.update(union, batch_s), v_target_meter.update(target, batch_s)
@@ -191,41 +197,39 @@ def model_training(train_img_path, train_mask_path,
             val_mAcc.append(round(v_mAcc, 3))
             val_allAcc.append(round(v_allAcc, 3))
 
-        scheduler.step(v_loss_meter.avg)
-
+        #scheduler.step(v_loss_meter.avg)
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
-
         with open(result_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerows(data)
 
-        if epoch == 1 or (train_loss[-1] <= min(train_loss[:-1])):
+        if epoch == 1 or (val_loss[-1] <= min(val_loss[:-1])):
             checkpoint = {"model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
-            'scheduler': scheduler.state_dict(),
+            #'scheduler': scheduler.state_dict(),
             "scaler": scaler.state_dict()}
-            torch.save(checkpoint, f'D:/University/MyProject/Source/CheckPoints/x8pre/{epoch}_mymodel.pt')
+            torch.save(checkpoint, f'D:/University/MyProject/Source/CheckPoints/train_13/model_{epoch}.pth')
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Total training time {}'.format(total_time_str))
 
 if __name__ == "__main__":
-    model_checkpint_path = None#r'D:\University\MyProject\Source\CheckPoints\x8\173_mymodel.pt'
+    model_checkpint_path = None#r'D:\University\MyProject\Source\CheckPoints\train_12\model_49.pth'
 
-    train_img_path  = r'D:\University\MyProject\Data\Data_zoomX4\Image_480'
-    train_mask_path = r'D:\University\MyProject\Data\Data_zoomX4\Mask_480'
+    train_img_path  = r'D:\University\MyProject\Data\traindata\image1024'
+    train_mask_path = r'D:\University\MyProject\Data\traindata\mask1024'
 
-    val_img_path  = r'D:\University\MyProject\Data\Val_dataset_X4\Image'
-    val_mask_path = r'D:\University\MyProject\Data\Val_dataset_X4\Mask'
+    val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
+    val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\MyProject\Source\data_result_training\training_resultx8pre.csv'
-    batch_s = 2
+    result_path = r'D:\University\MyProject\Source\data_result_training\train_13.csv'
+    batch_s = 4
     n_workers = 6
-    n_classes = 5
-    base_lr = 1e-4
-    epochs = 100
+    n_classes = 6
+    base_lr = 0.03
+    epochs = 150
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
