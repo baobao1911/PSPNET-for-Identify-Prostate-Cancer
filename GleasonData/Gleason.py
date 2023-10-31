@@ -30,8 +30,7 @@ class Gleason(Dataset):
     """CLASSES = ['background', 'Begin', 'Gleason score 5', 'Gleason score 3', 'Gleason score 4']"""
     """CLASSES = ['0', '1', '2', '3', '4']"""
 
-    def __init__(self, images_dir, masks_dir, augmentation=None,
-                 preprocessing=None, test=False):
+    def __init__(self, images_dir, masks_dir, tranforms=None, test=False):
         self.img_list = os.listdir(images_dir)
         self.images_fps = [os.path.join(images_dir, image_id) for image_id in self.img_list]
 
@@ -40,8 +39,7 @@ class Gleason(Dataset):
 
         # convert str names to class values on masks
         self.class_values = [0, 1, 2, 3, 4, 5]
-        self.augmentation = augmentation
-        self.preprocessing = preprocessing
+        self.get_tranforms = tranforms
         self.test = test
 
     def __getitem__(self, i):
@@ -49,12 +47,8 @@ class Gleason(Dataset):
         image = cv2.imread(self.images_fps[i])
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.test:
-            if self.augmentation:
-                sample = self.augmentation(image=image)
-                image = sample['image']
-            if self.preprocessing:
-                sample = self.preprocessing(image=image)
-                image = sample['image']
+            samples = self.get_tranforms(image=image)
+            image = samples['image']
             return image
 
         mask = cv2.imread(self.masks_fps[i], 0)
@@ -63,14 +57,9 @@ class Gleason(Dataset):
         # masks = [(mask == v) for v in self.class_values]
         # mask = np.stack(masks, axis=-1).astype('float')
 
-        # apply augmentations
-        if self.augmentation != None:
-            samples = self.augmentation(image=image, mask=mask)
-            image, mask = samples['image'], samples['mask']
-
         # apply tranfrom
-        if self.preprocessing != None:
-            samples = self.preprocessing(image=image, mask=mask)
+        if self.get_tranforms != None:
+            samples = self.get_tranforms(image=image, mask=mask)
             image, mask = samples['image'], samples['mask']
         return image, mask
 
