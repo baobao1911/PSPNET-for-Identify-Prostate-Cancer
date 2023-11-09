@@ -5,9 +5,8 @@ import Model.Resnet101 as models
 from Model.PPM import PPM
 
 class PSPNet(nn.Module):
-    def __init__(self, layers=50, bins=(1, 2, 3, 6), dropout=0.2, classes=5, zoom_factor=8, use_ppm=True, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 3, 6), dropout=0.2, classes=5, zoom_factor=8, use_ppm=True, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet, self).__init__()
-        assert layers in [50, 101, 152]
         assert 2048 % len(bins) == 0
         assert classes > 1
         assert zoom_factor in [1, 2, 4, 8]
@@ -15,8 +14,8 @@ class PSPNet(nn.Module):
         self.use_ppm = use_ppm
         self.criterion = criterion
 
-
-        resnet = models.resnet101(pretrained=True)
+        resnet_path = r''
+        resnet = models.resnet101(pretrained=pretrained)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 
