@@ -17,8 +17,8 @@ def intersectionAndUnionGPU(output, target, K, ignore_index=255):
     area_union = area_output + area_target - area_intersection
     return area_intersection, area_union, area_target
 
-def Get_dataset(img_path, mask_path, tranforms=False, train=False, test=False):
-    dataset = Gleason(img_path, mask_path, tranforms=tranforms, train=train, test=test)
+def Get_dataset(img_path, mask_path, tranforms=False, train=False, test=False,  base_size=304, multi_scale=False):
+    dataset = Gleason(img_path, mask_path, tranforms=tranforms, train=train, test=test, base_size=base_size, multi_scale=multi_scale)
     return dataset
 
 def poly_learning_rate(base_lr, curr_iter, max_iter, power=0.9):

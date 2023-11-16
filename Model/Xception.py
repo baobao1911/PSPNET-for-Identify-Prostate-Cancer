@@ -1,80 +1,119 @@
+"""
+Ported to pytorch thanks to [tstandley](https://github.com/tstandley/Xception-PyTorch)
+
+@author: tstandley
+Adapted by cadene
+
+Creates an Xception Model as defined in:
+
+Francois Chollet
+Xception: Deep Learning with Depthwise Separable Convolutions
+https://arxiv.org/pdf/1610.02357.pdf
+
+This weights ported from the Keras implementation. Achieves the following performance on the validation set:
+
+Loss:0.9173 Prec@1:78.892 Prec@5:94.292
+
+REMEMBER to set your image size to 3x299x299 for both test and validation
+
+normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                  std=[0.5, 0.5, 0.5])
+
+The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
+"""
+import torch
 import torch.nn as nn
-import math
-import os
+import torch.nn.functional as F
 
-bn_mom = 0.0003
+__all__ = ['Xception']
 
+default_cfgs = {
+    'xception': {
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth',
+        'input_size': (3, 299, 299),
+        'pool_size': (10, 10),
+        'crop_pct': 0.8975,
+        'interpolation': 'bicubic',
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'num_classes': 1000,
+        'first_conv': 'conv1',
+        'classifier': 'fc'
+        # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
+    }
+}
+
+class Linear(nn.Linear):
+    r"""Applies a linear transformation to the incoming data: :math:`y = xA^T + b`
+
+    Wraps torch.nn.Linear to support AMP + torchscript usage by manually casting
+    weight & bias to input.dtype to work around an issue w/ torch.addmm in this use case.
+    """
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if torch.jit.is_scripting():
+            bias = self.bias.to(dtype=input.dtype) if self.bias is not None else None
+            return F.linear(input, self.weight.to(dtype=input.dtype), bias=bias)
+        else:
+            return F.linear(input, self.weight, self.bias)
+
+def create_classifier(num_features, num_classes, pool_type='avg', use_conv=False):
+    global_pool = nn.AdaptiveAvgPool2d(1)
+    fc = Linear(num_features, num_classes, bias=True)
+    return global_pool, fc
 
 class SeparableConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False,
-                 activate_first=True, inplace=True):
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1):
         super(SeparableConv2d, self).__init__()
-        self.relu0 = nn.ReLU(inplace=inplace)
-        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding, dilation, groups=in_channels,
-                                   bias=bias)
-        self.bn1 = nn.BatchNorm2d(in_channels, momentum=bn_mom)
-        self.relu1 = nn.ReLU(inplace=True)
-        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=bias)
-        self.bn2 = nn.BatchNorm2d(out_channels, momentum=bn_mom)
-        self.relu2 = nn.ReLU(inplace=True)
-        self.activate_first = activate_first
+
+        self.conv1 = nn.Conv2d(
+            in_channels, in_channels, kernel_size, stride, padding, dilation, groups=in_channels, bias=False)
+        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=False)
 
     def forward(self, x):
-        if self.activate_first:
-            x = self.relu0(x)
-        x = self.depthwise(x)
-        x = self.bn1(x)
-        if not self.activate_first:
-            x = self.relu1(x)
+        x = self.conv1(x)
         x = self.pointwise(x)
-        x = self.bn2(x)
-        if not self.activate_first:
-            x = self.relu2(x)
         return x
 
 
 class Block(nn.Module):
-    def __init__(self, in_filters, out_filters, strides=1, atrous=None, grow_first=True, activate_first=True,
-                 inplace=True):
+    def __init__(self, in_channels, out_channels, reps, strides=1, start_with_relu=True, grow_first=True):
         super(Block, self).__init__()
-        if atrous == None:
-            atrous = [1] * 3
-        elif isinstance(atrous, int):
-            atrous_list = [atrous] * 3
-            atrous = atrous_list
-        idx = 0
-        self.head_relu = True
-        if out_filters != in_filters or strides != 1:
-            self.skip = nn.Conv2d(in_filters, out_filters, 1, stride=strides, bias=False)
-            self.skipbn = nn.BatchNorm2d(out_filters, momentum=bn_mom)
-            self.head_relu = False
+
+        if out_channels != in_channels or strides != 1:
+            self.skip = nn.Conv2d(in_channels, out_channels, 1, stride=strides, bias=False)
+            self.skipbn = nn.BatchNorm2d(out_channels)
         else:
             self.skip = None
 
-        self.hook_layer = None
-        if grow_first:
-            filters = out_filters
+        rep = []
+        for i in range(reps):
+            if grow_first:
+                inc = in_channels if i == 0 else out_channels
+                outc = out_channels
+            else:
+                inc = in_channels
+                outc = in_channels if i < (reps - 1) else out_channels
+            rep.append(nn.ReLU(inplace=True))
+            rep.append(SeparableConv2d(inc, outc, 3, stride=1, padding=1))
+            rep.append(nn.BatchNorm2d(outc))
+
+        if not start_with_relu:
+            rep = rep[1:]
         else:
-            filters = in_filters
-        self.sepconv1 = SeparableConv2d(in_filters, filters, 3, stride=1, padding=1 * atrous[0], dilation=atrous[0],
-                                        bias=False, activate_first=activate_first, inplace=self.head_relu)
-        self.sepconv2 = SeparableConv2d(filters, out_filters, 3, stride=1, padding=1 * atrous[1], dilation=atrous[1],
-                                        bias=False, activate_first=activate_first)
-        self.sepconv3 = SeparableConv2d(out_filters, out_filters, 3, stride=strides, padding=1 * atrous[2],
-                                        dilation=atrous[2], bias=False, activate_first=activate_first, inplace=inplace)
+            rep[0] = nn.ReLU(inplace=False)
+
+        if strides != 1:
+            rep.append(nn.MaxPool2d(3, strides, 1))
+        self.rep = nn.Sequential(*rep)
 
     def forward(self, inp):
+        x = self.rep(inp)
 
         if self.skip is not None:
             skip = self.skip(inp)
             skip = self.skipbn(skip)
         else:
             skip = inp
-
-        x = self.sepconv1(inp)
-        x = self.sepconv2(x)
-        self.hook_layer = x
-        x = self.sepconv3(x)
 
         x += skip
         return x
@@ -86,89 +125,77 @@ class Xception(nn.Module):
     https://arxiv.org/pdf/1610.02357.pdf
     """
 
-    def __init__(self, zoom_factor):
+    def __init__(self, num_classes=1000, in_chans=3, drop_rate=0.2, global_pool='avg'):
         """ Constructor
         Args:
             num_classes: number of classes
         """
         super(Xception, self).__init__()
+        self.drop_rate = drop_rate
+        self.global_pool = global_pool
+        self.num_classes = num_classes
+        self.num_features = 2048
 
-        stride_list = None
-        if zoom_factor == 2:
-            stride_list = [2, 1, 1,1,1]
-        elif zoom_factor == 4:
-            stride_list = [2, 2, 1,1,1]
-        elif zoom_factor==8:
-            stride_list=[2,2,2,1,1]
-        elif zoom_factor == 16:
-            stride_list = [2, 2,2,2, 1]
-        else:
-            raise ValueError('xception.py: output stride=%d is not supported.' % os)
-        self.conv1 = nn.Conv2d(3, 32, 3, 2, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(32, momentum=bn_mom)
-        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.act1 = nn.ReLU(inplace=True)
 
-        self.conv2 = nn.Conv2d(32, 64, 3, 1, 1, bias=False)
-        self.bn2 = nn.BatchNorm2d(64, momentum=bn_mom)
-        # do relu here
+        self.conv2 = nn.Conv2d(32, 64, 3, bias=False)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.act2 = nn.ReLU(inplace=True)
 
-        self.block1 = Block(64, 128, 2)
-        self.block2 = Block(128, 256, stride_list[0], inplace=False)
-        # self.block3 = Block(256, 728, stride_list[1])
-        self.block3 = Block(256, 728, stride_list[3])
+        self.block1 = Block(64, 128, 2, 2, start_with_relu=False)
+        self.block2 = Block(128, 256, 2, 2)
+        self.block3 = Block(256, 728, 2, 2)
 
-        rate = 16 // zoom_factor
-        self.block4 = Block(728, 728, 1, atrous=rate)
-        self.block5 = Block(728, 728, 1, atrous=rate)
-        self.block6 = Block(728, 728, 1, atrous=rate)
-        self.block7 = Block(728, 728, 1, atrous=rate)
+        self.block4 = Block(728, 728, 3, 1)
+        self.block5 = Block(728, 728, 3, 1)
+        self.block6 = Block(728, 728, 3, 1)
+        self.block7 = Block(728, 728, 3, 1)
 
-        self.block8 = Block(728, 728, 1, atrous=rate)
-        self.block9 = Block(728, 728, 1, atrous=rate)
-        self.block10 = Block(728, 728, 1, atrous=rate)
-        self.block11 = Block(728, 728, 1, atrous=rate)
+        self.block8 = Block(728, 728, 3, 1)
+        self.block9 = Block(728, 728, 3, 1)
+        self.block10 = Block(728, 728, 3, 1)
+        self.block11 = Block(728, 728, 3, 1)
 
-        self.block12 = Block(728, 728, 1, atrous=rate)
-        self.block13 = Block(728, 728, 1, atrous=rate)
-        self.block14 = Block(728, 728, 1, atrous=rate)
-        self.block15 = Block(728, 728, 1, atrous=rate)
+        self.block12 = Block(728, 1024, 2, 2, grow_first=False)
 
-        self.block16 = Block(728, 728, 1, atrous=[1 * rate, 1 * rate, 1 * rate])
-        self.block17 = Block(728, 728, 1, atrous=[1 * rate, 1 * rate, 1 * rate])
-        self.block18 = Block(728, 728, 1, atrous=[1 * rate, 1 * rate, 1 * rate])
-        self.block19 = Block(728, 728, 1, atrous=[1 * rate, 1 * rate, 1 * rate])
+        self.conv3 = SeparableConv2d(1024, 1536, 3, 1, 1)
+        self.bn3 = nn.BatchNorm2d(1536)
+        self.act3 = nn.ReLU(inplace=True)
 
-        # self.block20 = Block(728, 1024, stride_list[2], atrous=rate, grow_first=False)
-        self.block20 = Block(728, 1024, stride_list[4], atrous=rate, grow_first=False)
-        self.conv3 = SeparableConv2d(1024, 1536, 3, 1, 1 * rate, dilation=rate, activate_first=False)
+        self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1)
+        self.bn4 = nn.BatchNorm2d(self.num_features)
+        self.act4 = nn.ReLU(inplace=True)
+        self.feature_info = [
+            dict(num_chs=64, reduction=2, module='act2'),
+            dict(num_chs=128, reduction=4, module='block2.rep.0'),
+            dict(num_chs=256, reduction=8, module='block3.rep.0'),
+            dict(num_chs=728, reduction=16, module='block12.rep.0'),
+            dict(num_chs=2048, reduction=32, module='act4'),
+        ]
 
-        self.conv4 = SeparableConv2d(1536, 1536, 3, 1, 1 * rate, dilation=rate, activate_first=False)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
-        self.conv5 = SeparableConv2d(1536, 2048, 3, 1, 1 * rate, dilation=rate, activate_first=False)
-        self.layers = []
-
-        # ------- init weights --------
+        # #------- init weights --------
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-        # -----------------------------
 
     def forward(self, x):
-        self.layers = []
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.relu(x)
+        x = self.act1(x)
+
         x = self.conv2(x)
         x = self.bn2(x)
-        x = self.relu(x) # /2
+        x = self.act2(x)
 
-        x = self.block1(x) # /4
-        x = self.block2(x) # /8
-        low_featrue_layer = self.block2.hook_layer
+        x = self.block1(x)
+        x = self.block2(x)
         x = self.block3(x)
         x = self.block4(x)
         x = self.block5(x)
@@ -179,19 +206,19 @@ class Xception(nn.Module):
         x = self.block10(x)
         x = self.block11(x)
         x = self.block12(x)
-        x = self.block13(x)
-        x = self.block14(x)
-        x = self.block15(x)
-        x = self.block16(x)
-        x = self.block17(x)
-        x = self.block18(x)
-        x = self.block19(x)
-        x = self.block20(x)
 
         x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.act3(x)
 
         x = self.conv4(x)
+        x = self.bn4(x)
+        x = self.act4(x)
+        return x
 
-        x = self.conv5(x)
-
-        return low_featrue_layer, x
+def xception(pretrained=False, model_path=None, **kwargs):
+    model = Xception(**kwargs)
+    if pretrained and model_path is not None:
+        # model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
+        model.load_state_dict(torch.load(model_path), strict=False)
+    return model

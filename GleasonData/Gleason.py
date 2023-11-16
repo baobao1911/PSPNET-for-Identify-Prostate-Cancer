@@ -16,21 +16,22 @@ COLORMAP = [
 
 ]
 
-def get_transforms(image=None, mask=None, train=False, test=False):
+def get_transforms(image=None, mask=None, train=False, test=False, base_size=304, multi_scale=False):
+    if multi_scale == True:
+        min_size = 256
+        max_size = 481
+        base_size = np.random.randint(low=min_size, high=max_size)
+        
     if train == False:
-        size = 304
         Transform = albu.Compose([
-            albu.Resize(width=size, height=size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
+            albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
 
             albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
             ToTensorV2(),
             ])
     else:
-        min_size = 256
-        max_size = 512
-        size = 304#np.random.randint(min_size, max_size)
         Transform = albu.Compose([
-            albu.Resize(width=size, height=size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
+            albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
 
             albu.Superpixels(p_replace=0.1, n_segments=128, interpolation=cv2.INTER_NEAREST, p=0.7),
             albu.HorizontalFlip(p=0.5),
@@ -66,7 +67,7 @@ class Gleason(Dataset):
     """CLASSES = ['background', 'Begin', 'Gleason score 5', 'Gleason score 3', 'Gleason score 4']"""
     """CLASSES = ['0', '1', '2', '3', '4']"""
 
-    def __init__(self, images_dir, masks_dir, tranforms=False, train=False, test=False):
+    def __init__(self, images_dir, masks_dir, tranforms=False, train=False, test=False, base_size=304, multi_scale=False):
         self.img_list = os.listdir(images_dir)
         self.images_fps = [os.path.join(images_dir, image_id) for image_id in self.img_list]
 
@@ -78,6 +79,8 @@ class Gleason(Dataset):
         self.get_tranforms = tranforms
         self.train = train
         self.test = test
+        self.size = base_size
+        self.multi_scale = multi_scale
 
     def __getitem__(self, i):
         # read data
@@ -85,7 +88,7 @@ class Gleason(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         # image = Image.open(self.images_fps[i])
         if self.test:
-            image = get_transforms(image=image, train=False, test=True)
+            image = get_transforms(image=image, train=False, test=True,  base_size=self.size, multi_scale=self.multi_scale)
             return image
 
         mask = cv2.imread(self.masks_fps[i], 0)
@@ -96,7 +99,7 @@ class Gleason(Dataset):
 
         # apply tranfrom
         if self.get_tranforms == True:
-            image, mask = get_transforms(image=image, mask=mask, train=self.train, test=self.test)
+            image, mask = get_transforms(image=image, mask=mask, train=self.train, test=self.test, base_size=self.size, multi_scale=self.multi_scale)
         return image, mask
 
     def __len__(self):

@@ -14,8 +14,8 @@ class PSPNet(nn.Module):
         self.use_ppm = use_ppm
         self.criterion = criterion
 
-        resnet_path = r''
-        resnet = models.resnet101(pretrained=pretrained)
+        resnet_path = r'D:\University\MyProject\Source\Utils\resnet101-v2.pth'
+        resnet = models.resnet101(pretrained=pretrained, model_path=resnet_path)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 

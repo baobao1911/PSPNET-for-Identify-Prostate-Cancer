@@ -2,14 +2,21 @@ import datetime
 import time
 import numpy as np
 import torch
+
 import csv
 import os
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Model.PSPNet import PSPNet
-from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate
-
+from Model.Custom_PPM import Custom_PPM
+from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate, Collate_fn
+# Freeze batch normalization layers
+def freeze_bn_layers(model):
+    for layer in model.children():
+        if isinstance(layer, torch.nn.BatchNorm2d):
+            layer.eval()
+            for param in layer.parameters():
+                param.requires_grad = False
 ################################################################################################################################################
 def model_training(train_img_path, train_mask_path,
                    val_img_path, val_mask_path,
@@ -17,8 +24,8 @@ def model_training(train_img_path, train_mask_path,
                    epochs, base_lr, 
                    model_checkpint_path, result_path):
     # 1. Create dataset
-    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=304, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=304, multi_scale=False, zoom_factor=16)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304, multi_scale=False, zoom_factor=8)
     
 
 
@@ -52,24 +59,24 @@ def model_training(train_img_path, train_mask_path,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'device used: {device}')
 
-    class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
+    class_weights = torch.tensor([0.71527965, 0.77025329, 0.000000001, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
     alpha=0.25
     gamma=2
 
 
-    model = PSPNet(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
+    model = Custom_PPM(classes=n_classes, zoom_factor=16, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.cls, model.aux]
-
+    modules_new = [model.ppm, model.cls, model.aux, model.low_features, model.final_conv, model.gau1]
+    
     params_list = []
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
-    for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*2))
+    for module in modules_new: 
+        params_list.append(dict(params=module.parameters(), lr=base_lr* 5))
 
 
-    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=0.0001, momentum=0.9)
 
     ep = 1
     scaler = torch.cuda.amp.GradScaler()
@@ -98,11 +105,8 @@ def model_training(train_img_path, train_mask_path,
 
     wait = 0
     best_loss = None
-    patience = 6
+    patience = 5
     factor = 0.65
-
-    torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-
     # 5. Begin training
     start_time = time.time()
     for epoch in range(ep, epochs):
@@ -115,6 +119,10 @@ def model_training(train_img_path, train_mask_path,
         t_union_meter.reset()
         t_target_meter.reset()
         model.train()
+        # Call the function to freeze batch normalization layers
+        # for m in  modules_ori:
+        #     freeze_bn_layers(m)
+
         max_iter = epochs * len(train_data_loader)
         for batch_id, (input, target) in enumerate(tqdm(train_data_loader), start=1):
             for param in model.parameters():
@@ -193,24 +201,24 @@ def model_training(train_img_path, train_mask_path,
             val_mAcc.append(round(v_mAcc, 3))
             val_allAcc.append(round(v_allAcc, 3))
 
-        # if best_loss is None:
-        #     best_loss = v_loss_meter.avg
-        # elif v_loss_meter.avg < best_loss:
-        #     best_loss = v_loss_meter.avg
-        #     wait = 0
-        # else:
-        #     wait += 1
-        #     if wait >= patience:
-        #         base_lr *= factor
-        #         wait = 0
-        #         print(f'\n-->> Activate ReduceLROnPlateplateau, base lr: {base_lr}\n')
+        if best_loss is None:
+            best_loss = v_loss_meter.avg
+        elif v_loss_meter.avg < best_loss:
+            best_loss = v_loss_meter.avg
+            wait = 0
+        else:
+            wait += 1
+            if wait >= patience:
+                base_lr *= factor
+                wait = 0
+                print(f'\n-->> Activate ReduceLROnPlateplateau, base lr: {base_lr}\n')
 
         current_iter = epoch * len(train_data_loader) + batch_id + 1
         current_lr = poly_learning_rate(base_lr, current_iter, max_iter, power=0.9)
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr* 2
+            optimizer.param_groups[index]['lr'] = current_lr*5
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
@@ -224,7 +232,7 @@ def model_training(train_img_path, train_mask_path,
                 "scaler": scaler.state_dict()
             }
 
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\ModelSave\PSPNet\best_model.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\ModelSave\Custom2\best_model.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -235,7 +243,7 @@ def model_training(train_img_path, train_mask_path,
     print('Total training time {}'.format(total_time_str))
 
 if __name__ == "__main__":
-    model_checkpint_path = None
+    model_checkpint_path = None#r'D:\University\MyProject\Source\CheckPoints\train_12\model_49.pth'
 
     train_img_path  = r'D:\University\MyProject\Data\traindata\image1024'
     train_mask_path = r'D:\University\MyProject\Data\traindata\mask1024'
@@ -243,12 +251,12 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\PSPNet.csv'
-    batch_s = 8
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Custom2.csv'
+    batch_s = 12
     n_workers = 6
     n_classes = 6
-    base_lr = 0.03
-    epochs = 180
+    base_lr = 0.045
+    epochs = 150
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
