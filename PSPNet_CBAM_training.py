@@ -18,7 +18,7 @@ def model_training(train_img_path, train_mask_path,
                    model_checkpint_path, result_path):
     # 1. Create dataset
     train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=304, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304, multi_scale=False)
     
 
 
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
     result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_CBAM.csv'
-    batch_s = 8
+    batch_s = 6
     n_workers = 6
     n_classes = 6
     base_lr = 0.03
