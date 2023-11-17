@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import Model.ResnetCBAM as encoding
+import Model.Backbone.ResnetCBAM as encoding
 from Model.PPM import PPM
 
 class PSPNet_CBAM(nn.Module):
@@ -15,7 +15,7 @@ class PSPNet_CBAM(nn.Module):
         self.criterion = criterion
 
 
-        resnet = encoding.resnet101CBAM(model_path=r'D:\copMyProject\Utils\resnet101_v2.pth', pretrained=True)
+        resnet = encoding.resnet101CBAM(model_path=r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Utils\resnet101-v2.pth', pretrained=True)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 
