@@ -5,7 +5,7 @@ import Model.Backbone.ResnetCBAM as encoding
 from Model.PPM import PPM
 
 class PSPNet_CBAM(nn.Module):
-    def __init__(self,bins=(1, 2, 3, 6), dropout=0.2, classes=6, zoom_factor=8, use_ppm=True, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self,bins=(1, 2, 3, 6), dropout=0.4, classes=6, zoom_factor=8, use_ppm=True, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet_CBAM, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
