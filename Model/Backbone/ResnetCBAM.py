@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from Model.Module.CBAM import CBAM
+from Model.Module.CBAM import *
 model_urls = {
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'
 }

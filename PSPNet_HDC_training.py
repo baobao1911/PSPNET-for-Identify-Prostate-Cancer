@@ -55,7 +55,7 @@ def model_training(train_img_path, train_mask_path,
     class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
     alpha=0.25
-    gamma=2
+    gamma=3
 
 
     model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
@@ -66,7 +66,7 @@ def model_training(train_img_path, train_mask_path,
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*2))
+        params_list.append(dict(params=module.parameters(), lr=base_lr* 5))
 
     optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
 
@@ -96,6 +96,10 @@ def model_training(train_img_path, train_mask_path,
         val_allAcc = data[7].tolist()
 
     torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    # wait = 0
+    # best_loss = None
+    # patience = 10
+    # factor = 0.5
 
     # 5. Begin training
     start_time = time.time()
@@ -187,12 +191,24 @@ def model_training(train_img_path, train_mask_path,
             val_mAcc.append(round(v_mAcc, 3))
             val_allAcc.append(round(v_allAcc, 3))
 
+        # if best_loss is None:
+        #     best_loss = v_loss_meter.avg
+        # elif v_loss_meter.avg < best_loss:
+        #     best_loss = v_loss_meter.avg
+        #     wait = 0
+        # else:
+        #     wait += 1
+        #     if wait >= patience:
+        #         base_lr *= factor
+        #         wait = 0
+        #         print(f'\n-->> Activate ReduceLROnPlateplateau, base lr: {base_lr}\n')
+
         current_iter = epoch * len(train_data_loader) + batch_id + 1
         current_lr = poly_learning_rate(base_lr, current_iter, max_iter, power=0.9)
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr* 2
+            optimizer.param_groups[index]['lr'] = current_lr*5
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
@@ -205,7 +221,7 @@ def model_training(train_img_path, train_mask_path,
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_CBAM_HDC.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -224,12 +240,12 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC.csv'
-    batch_s = 6
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_CBAM_HDC.csv'
+    batch_s = 4
     n_workers = 6
     n_classes = 6
     base_lr = 0.03
-    epochs = 180
+    epochs = 200
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True

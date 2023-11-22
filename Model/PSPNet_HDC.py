@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from Model.Backbone.Resnet101 import *
-from Model.Module.PPM_atrous import *
+from Model.Module.HDC import *
+from Model.Module.PPM import *
 
 
 class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 4, 8), dropout=0.4, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 4, 8), rates=[1, 2, 5, 1, 2, 5], dropout=0.5, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
@@ -32,9 +33,9 @@ class PSPNet_HDC(nn.Module):
 
         fea_dim = 2048
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
-        self.hdc = HybridDilatedConv(fea_dim, 3072, kernel_size=3)
-        
-        fea_dim = fea_dim*2 + 3072
+        self.hdc = HybridDilatedConv(fea_dim, 1536, kernel_size=5, rates=rates)
+
+        fea_dim = fea_dim*2 + 1536
         self.cls = nn.Sequential(
             nn.Conv2d(fea_dim, 512, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(512),
@@ -42,6 +43,7 @@ class PSPNet_HDC(nn.Module):
             nn.Dropout2d(p=dropout),
             nn.Conv2d(512, classes, kernel_size=1)
         )
+
         if self.training:
             self.aux = nn.Sequential(
                 nn.Conv2d(1024, 256, kernel_size=3, padding=1, bias=False),
@@ -64,6 +66,7 @@ class PSPNet_HDC(nn.Module):
         x_hdc = self.hdc(x)
         x = torch.cat([x_hdc, x_ppm], dim=1)
         x = self.cls(x)
+
         if self.zoom_factor != 1:
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
 
