@@ -2,9 +2,6 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.functional import upsample,normalize
-
-
 
 class PAM_Module(nn.Module):
     """ Position attention module"""
@@ -46,8 +43,6 @@ class CAM_Module(nn.Module):
     def __init__(self, in_dim):
         super(CAM_Module, self).__init__()
         self.chanel_in = in_dim
-
-
         self.gamma = nn.Parameter(torch.zeros(1))
         self.softmax  = nn.Softmax(dim=-1)
     def forward(self,x):
@@ -72,46 +67,9 @@ class CAM_Module(nn.Module):
         out = self.gamma*out + x
         return out
 
-class DANet(nn.Module):
-    r"""Fully Convolutional Networks for Semantic Segmentation
-
-    Parameters
-    ----------
-    nclass : int
-        Number of categories for the training dataset.
-    backbone : string
-        Pre-trained dilated backbone network type (default:'resnet50'; 'resnet50',
-        'resnet101' or 'resnet152').
-    norm_layer : object
-        Normalization layer used in backbone network (default: :class:`mxnet.gluon.nn.BatchNorm`;
-    Reference:
-
-        Long, Jonathan, Evan Shelhamer, and Trevor Darrell. "Fully convolutional networks
-        for semantic segmentation." *CVPR*, 2015
-
-    """
-    def __init__(self, nclass, backbone, aux=False, se_loss=False, norm_layer=nn.BatchNorm2d, **kwargs):
-        super(DANet, self).__init__(nclass, backbone, aux, se_loss, norm_layer=norm_layer, **kwargs)
-        self.head = DANetHead(2048, nclass, norm_layer)
-
-    def forward(self, x):
-        imsize = x.size()[2:]
-        _, _, c3, c4 = self.base_forward(x)
-
-        x = self.head(c4)
-        x = list(x)
-        x[0] = upsample(x[0], imsize, **self._up_kwargs)
-        x[1] = upsample(x[1], imsize, **self._up_kwargs)
-        x[2] = upsample(x[2], imsize, **self._up_kwargs)
-
-        outputs = [x[0]]
-        outputs.append(x[1])
-        outputs.append(x[2])
-        return tuple(outputs)
-        
-class DANetHead(nn.Module):
+class DAModule(nn.Module):
     def __init__(self, in_channels, out_channels, norm_layer):
-        super(DANetHead, self).__init__()
+        super(DAModule, self).__init__()
         inter_channels = in_channels // 4
         self.conv5a = nn.Sequential(nn.Conv2d(in_channels, inter_channels, 3, padding=1, bias=False),
                                    norm_layer(inter_channels),
@@ -150,7 +108,5 @@ class DANetHead(nn.Module):
         
         sasc_output = self.conv8(feat_sum)
 
-        output = [sasc_output]
-        output.append(sa_output)
-        output.append(sc_output)
-        return tuple(output)
+        output = [sasc_output, sa_output, sc_output]
+        return output
