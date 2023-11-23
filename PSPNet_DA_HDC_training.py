@@ -193,7 +193,6 @@ def model_training(train_img_path, train_mask_path,
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
             optimizer.param_groups[index]['lr'] = current_lr*5
-        base_lr *=0.95
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:

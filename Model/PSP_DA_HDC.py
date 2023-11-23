@@ -7,7 +7,7 @@ from Model.Module.PPM import *
 from Model.Module.DAModule import *
 
 class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.5, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
@@ -32,12 +32,15 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
+        self.da = DAModule(fea_dim, fea_dim, nn.BatchNorm2d)
+
+
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
         hdc_fea_dim = 256*len(rates)
         self.hdc = HybridDilatedConv(fea_dim, hdc_fea_dim, kernel_size=3, rates=rates)
-        self.da = DAModule(fea_dim, int(fea_dim//4), nn.BatchNorm2d)
 
-        fea_dim = fea_dim*2 + hdc_fea_dim + int(fea_dim//4)
+
+        fea_dim = fea_dim*2 + hdc_fea_dim
         self.cls = nn.Sequential(
             nn.Conv2d(fea_dim, 512, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(512),
@@ -63,11 +66,11 @@ class PSPNet_HDC(nn.Module):
         x = self.layer2(x)
         x_tmp = self.layer3(x)
         x = self.layer4(x_tmp)
+        x = self.da(x)
 
         x_ppm = self.ppm(x)
         x_hdc = self.hdc(x)
-        x_da = self.da(x)
-        x = torch.cat([x_hdc, x_ppm, x_da], dim=1)
+        x = torch.cat([x_hdc, x_ppm], dim=1)
         x = self.cls(x)
 
         if self.zoom_factor != 1:
