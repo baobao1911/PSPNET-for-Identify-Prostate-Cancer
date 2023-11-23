@@ -32,11 +32,11 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
+        fea_dim_hdc = 256*len(rates)
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
-        hdc_fea_dim = 256*len(rates)
-        self.hdc = HybridDilatedConv(fea_dim, hdc_fea_dim, kernel_size=5, rates=rates)
+        self.hdc = HybridDilatedConv(fea_dim, fea_dim_hdc, kernel_size=3, rates=rates)
 
-        fea_dim = fea_dim*2 + hdc_fea_dim
+        fea_dim = fea_dim*2 + fea_dim_hdc
         self.cls = nn.Sequential(
             nn.Conv2d(fea_dim, 512, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(512),
