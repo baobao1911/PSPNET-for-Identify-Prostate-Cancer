@@ -9,7 +9,7 @@ class ChannelAttention(nn.Module):
         self.max_pool = nn.AdaptiveMaxPool2d(1)
            
         self.excitation  = nn.Sequential(nn.Conv2d(in_planes, in_planes // reduction_rate, 1, bias=False),
-                               nn.ReLU(),
+                               nn.ReLU(inplace=True),
                                nn.Conv2d(in_planes // reduction_rate, in_planes, 1, bias=False))
         self.sigmoid = nn.Sigmoid()
 

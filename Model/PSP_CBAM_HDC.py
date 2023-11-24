@@ -4,11 +4,11 @@ from torch.nn import functional as F
 from Model.Backbone.Resnet101 import *
 from Model.Module.HDC import *
 from Model.Module.PPM import *
-from Model.Module.DAModule import *
+from Model.Module.CBAM import *
 
-class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
-        super(PSPNet_HDC, self).__init__()
+class PSP_CBAM_HDC(nn.Module):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.4, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+        super(PSP_CBAM_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
         assert zoom_factor in [1, 2, 4, 8]
@@ -32,23 +32,23 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
         hdc_fea_dim = 256*len(rates)
+        self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
+
         self.hdc = HybridDilatedConv(fea_dim, hdc_fea_dim, kernel_size=3, rates=rates)
 
 
         fea_dim = fea_dim*2 + hdc_fea_dim
 
-        self.da = DAModule(fea_dim, 512, nn.BatchNorm2d)
+        self.cbam = CBAM(fea_dim)
 
         self.cls = nn.Sequential(
-            nn.Conv2d(512, 64, kernel_size=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(fea_dim, 512, kernel_size=1, bias=False),
+            nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=dropout),
-            nn.Conv2d(64, classes, kernel_size=1)
+            nn.Conv2d(512, classes, kernel_size=1)
         )
-
 
         if self.training:
             self.aux = nn.Sequential(
@@ -71,7 +71,8 @@ class PSPNet_HDC(nn.Module):
         x_ppm = self.ppm(x)
         x_hdc = self.hdc(x)
         x = torch.cat([x_hdc, x_ppm], dim=1)
-        x = self.da(x)
+
+        x = self.cbam(x)
         x = self.cls(x)
 
         if self.zoom_factor != 1:

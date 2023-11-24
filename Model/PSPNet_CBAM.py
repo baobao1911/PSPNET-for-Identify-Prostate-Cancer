@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import Model.Backbone.ResnetCBAM as encoding
-from Model.PPM import PPM
+from Model.Module.PPM import PPM
 
 class PSPNet_CBAM(nn.Module):
     def __init__(self,bins=(1, 2, 3, 6), dropout=0.4, classes=6, zoom_factor=8, use_ppm=True, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
