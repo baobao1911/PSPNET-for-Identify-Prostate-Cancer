@@ -32,22 +32,23 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        self.da = DAModule(fea_dim, fea_dim, nn.BatchNorm2d)
-
-
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
         hdc_fea_dim = 256*len(rates)
         self.hdc = HybridDilatedConv(fea_dim, hdc_fea_dim, kernel_size=3, rates=rates)
 
 
         fea_dim = fea_dim*2 + hdc_fea_dim
+
+        self.da = DAModule(fea_dim, 512, nn.BatchNorm2d)
+
         self.cls = nn.Sequential(
-            nn.Conv2d(fea_dim, 512, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(512),
+            nn.Conv2d(512, 64, kernel_size=1, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=dropout),
-            nn.Conv2d(512, classes, kernel_size=1)
+            nn.Conv2d(64, classes, kernel_size=1)
         )
+
 
         if self.training:
             self.aux = nn.Sequential(
@@ -66,11 +67,11 @@ class PSPNet_HDC(nn.Module):
         x = self.layer2(x)
         x_tmp = self.layer3(x)
         x = self.layer4(x_tmp)
-        x = self.da(x)
 
         x_ppm = self.ppm(x)
         x_hdc = self.hdc(x)
         x = torch.cat([x_hdc, x_ppm], dim=1)
+        x = self.da(x)
         x = self.cls(x)
 
         if self.zoom_factor != 1:

@@ -7,7 +7,7 @@ from Model.Module.PPM import *
 
 
 class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 4, 8), rates=[1, 2, 5, 1, 2, 5], dropout=0.5, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1

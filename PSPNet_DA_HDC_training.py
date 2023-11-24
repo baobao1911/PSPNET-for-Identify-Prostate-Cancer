@@ -55,7 +55,7 @@ def model_training(train_img_path, train_mask_path,
     class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
     alpha=0.25
-    gamma=3
+    gamma=2
 
 
     model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
     result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_DA_HDC.csv'
-    batch_s = 4
+    batch_s = 6
     n_workers = 6
     n_classes = 6
     base_lr = 0.03
