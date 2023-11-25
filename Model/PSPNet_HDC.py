@@ -34,7 +34,8 @@ class PSPNet_HDC(nn.Module):
         fea_dim = 2048
         fea_dim_hdc = 256*len(rates)
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
-        self.hdc = HybridDilatedConv(fea_dim, fea_dim_hdc, kernel_size=3, rates=rates)
+
+        self.hdc = SCBAM(fea_dim, fea_dim_hdc, kernel_size=3, stride=1, rates=rates)
 
         fea_dim = fea_dim*2 + fea_dim_hdc
         self.cls = nn.Sequential(

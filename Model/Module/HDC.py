@@ -1,6 +1,60 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from Model.Backbone.Xception65 import *
+from Model.Module.CBAM import *
+
+
+class DWConv(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel_size, stride, dilation):
+        super(DWConv, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_ch, in_ch, kernel_size=1),
+            nn.BatchNorm2d(in_ch),
+            nn.ReLU(inplace=True)
+        )
+        self.dwconv = nn.Sequential(
+            SeparableConv2d(in_ch, out_ch, kernel_size=kernel_size, stride=stride, dilation=dilation, BatchNorm=nn.BatchNorm2d),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True)
+        )
+        self.conv1_2 = nn.Sequential(
+            nn.Conv2d(out_ch, out_ch, kernel_size=1),
+            nn.BatchNorm2d(out_ch)
+        )
+
+        self.ca = ChannelAttention(in_planes=out_ch)
+        self.relu = nn.ReLU(inplace=True)
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.dwconv(x)
+        x = self.conv1_2(x)
+        x = self.ca(x)*x
+        x = self.relu(x)
+        return x
+
+class SCBAM(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, rates):
+        super(SCBAM, self).__init__()
+
+        self.dilated_conv = []
+        for i, rate in enumerate(rates):
+            tmp = DWConv(in_channels, out_channels // len(rates), kernel_size, stride, rate)
+            self.dilated_conv.append(tmp)
+        self.dilated_conv = nn.ModuleList(self.dilated_conv)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        out = []
+        for hdc in self.dilated_conv:
+            out.append(hdc(x))
+        # for i in out:
+        #     print(i.size())
+        combined_features = torch.cat(out, 1)
+        output = self.bn(combined_features)
+        output = self.relu(output)
+        return output
 
 class HybridDilatedConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, rates):

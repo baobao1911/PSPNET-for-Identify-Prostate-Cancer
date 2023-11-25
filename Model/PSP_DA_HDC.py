@@ -8,37 +8,8 @@ from Model.Backbone.Xception65 import *
 from Model.Module.CBAM import *
 from Model.Module.DAModule import *
 
-class DWConv(nn.Module):
-    def __init__(self, in_ch, stride):
-        super(DWConv, self).__init__()
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_ch, in_ch, kernel_size=1),
-            nn.BatchNorm2d(in_ch),
-            nn.ReLU(inplace=True)
-        )
-        self.dwconv = nn.Sequential(
-            SeparableConv2d(in_ch, in_ch, kernel_size=3, stride=stride, BatchNorm=nn.BatchNorm2d),
-            nn.BatchNorm2d(in_ch),
-            nn.ReLU(inplace=True)
-        )
-        self.conv1_2 = nn.Sequential(
-            nn.Conv2d(in_ch, in_ch, kernel_size=1),
-            nn.BatchNorm2d(in_ch)
-        )
-
-        self.ca = nn.Sequential(
-            ChannelAttention(in_planes=in_ch),
-            nn.ReLU(inplace=True)
-        )
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.dwconv(x)
-        x = self.conv1_2(x)
-        x = self.ca(x)*x
-        return x
         
-        
-
+    
 
 class PSPNet_HDC(nn.Module):
     def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
