@@ -97,16 +97,14 @@ class DAModule(nn.Module):
         feat1 = self.conv5a(x)
         sa_feat = self.sa(feat1)
         sa_conv = self.conv51(sa_feat)
-        sa_output = self.conv6(sa_conv)
+        # sa_output = self.conv6(sa_conv)
 
         feat2 = self.conv5c(x)
         sc_feat = self.sc(feat2)
         sc_conv = self.conv52(sc_feat)
-        sc_output = self.conv7(sc_conv)
+        # sc_output = self.conv7(sc_conv)
 
         feat_sum = sa_conv+sc_conv
         
         sasc_output = self.conv8(feat_sum)
-
-        output = [sasc_output, sa_output, sc_output]
-        return output
+        return sasc_output
