@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from Model.Backbone.Resnet101 import *
+from Model.Backbone.ResnetCBAM import *
 from Model.Module.HDC import *
 from Model.Module.PPM import *
 from Model.Module.CBAM import *
@@ -16,7 +16,7 @@ class PSP_CBAM_HDC(nn.Module):
         self.criterion = criterion
 
         resnet_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Utils\resnet101-v2.pth'
-        resnet = resnet101(pretrained=pretrained, model_path=resnet_path)
+        resnet = resnet101CBAM(pretrained=pretrained, model_path=resnet_path)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 

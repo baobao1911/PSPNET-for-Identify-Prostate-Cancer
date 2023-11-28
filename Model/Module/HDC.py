@@ -22,13 +22,13 @@ class DWConv(nn.Module):
             nn.Conv2d(out_ch, out_ch, kernel_size=1),
             nn.BatchNorm2d(out_ch)
         )
-        self.ca = CBAM(in_ch=out_ch)
+        self.ca = CBAM(in_ch=out_ch, no_spatial=True)
         self.relu = nn.ReLU(inplace=True)
     def forward(self, x):
         x = self.conv1(x)
         x_tmp = self.dwconv(x)
         x = self.conv1_2(x_tmp)
-        x = self.ca(x) + x_tmp
+        x = self.ca(x)
         return x
 
 class SCBAM(nn.Module):

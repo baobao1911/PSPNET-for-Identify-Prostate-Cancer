@@ -66,9 +66,9 @@ def model_training(train_img_path, train_mask_path,
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*5 ))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*3 ))
 
-    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=0.0005, momentum=0.9)
 
     ep = 1
     scaler = torch.cuda.amp.GradScaler()
@@ -193,7 +193,7 @@ def model_training(train_img_path, train_mask_path,
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr*5
+            optimizer.param_groups[index]['lr'] = current_lr*3
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
@@ -226,11 +226,11 @@ if __name__ == "__main__":
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
     result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_CBAM_HDC.csv'
-    batch_s = 6
+    batch_s = 4
     n_workers = 6
     n_classes = 6
-    base_lr = 0.005
-    epochs = 180
+    base_lr = 0.001
+    epochs = 100
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
