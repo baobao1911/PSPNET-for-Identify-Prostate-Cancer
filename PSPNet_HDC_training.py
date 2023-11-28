@@ -229,7 +229,7 @@ if __name__ == "__main__":
     batch_s = 6
     n_workers = 6
     n_classes = 6
-    base_lr = 0.03
+    base_lr = 0.005
     epochs = 180
 
     torch.backends.cudnn.allow_tf32 = True
