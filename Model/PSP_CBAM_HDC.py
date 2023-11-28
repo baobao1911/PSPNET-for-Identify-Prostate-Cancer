@@ -7,7 +7,7 @@ from Model.Module.PPM import *
 from Model.Module.CBAM import *
 
 class PSP_CBAM_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.4, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSP_CBAM_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
@@ -32,26 +32,14 @@ class PSP_CBAM_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        hdc_fea_dim = 256*len(rates)
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
+        
+        fea_dim_hdc = 256*len(rates)
+        self.hdc = SCBAM(fea_dim, fea_dim_hdc, kernel_size=3, stride=1, rates=rates)
 
-        self.hdc = HybridDilatedConv(fea_dim, hdc_fea_dim, kernel_size=3, rates=rates)
-
-        self.conv_att = nn.Sequential(
-            nn.Conv2d(2048, 2048, kernel_size=1),
-            nn.BatchNorm2d(2048),
-            nn.ReLU(inplace=True)
-        )
-        self.chennal_att = ChannelAttention(2048, reduction_rate=16)
-        self.relu = nn.ReLU(inplace=True)
-
-
-        fea_dim = fea_dim*2 + hdc_fea_dim + 2048
-
-        self.cbam = CBAM(fea_dim)
-
+        fea_dim = fea_dim*2 + fea_dim_hdc
         self.cls = nn.Sequential(
-            nn.Conv2d(fea_dim, 512, kernel_size=1, bias=False),
+            nn.Conv2d(fea_dim, 512, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=dropout),

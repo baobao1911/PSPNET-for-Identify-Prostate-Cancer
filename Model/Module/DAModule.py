@@ -88,10 +88,10 @@ class DAModule(nn.Module):
                                    norm_layer(inter_channels),
                                    nn.ReLU())
 
-        self.conv6 = nn.Sequential(nn.Dropout2d(0.1, False), nn.Conv2d(inter_channels, out_channels, 1))
-        self.conv7 = nn.Sequential(nn.Dropout2d(0.1, False), nn.Conv2d(inter_channels, out_channels, 1))
+        self.conv6 = nn.Sequential(nn.Dropout2d(0.2, False), nn.Conv2d(inter_channels, out_channels, 1))
+        self.conv7 = nn.Sequential(nn.Dropout2d(0.2, False), nn.Conv2d(inter_channels, out_channels, 1))
 
-        self.conv8 = nn.Sequential(nn.Dropout2d(0.1, False), nn.Conv2d(inter_channels, out_channels, 1))
+        self.conv8 = nn.Sequential(nn.Dropout2d(0.2, False), nn.Conv2d(inter_channels, out_channels, 1))
 
     def forward(self, x):
         feat1 = self.conv5a(x)

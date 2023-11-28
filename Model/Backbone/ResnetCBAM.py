@@ -10,8 +10,6 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
-
-
 class Bottleneck(nn.Module):
     expansion = 4
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -28,7 +26,7 @@ class Bottleneck(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
 
-        self.cbam = CBAM(in_planes=planes * self.expansion)
+        self.cbam = CBAM(in_ch=planes * self.expansion)
 
         self.downsample = downsample
         self.stride = stride

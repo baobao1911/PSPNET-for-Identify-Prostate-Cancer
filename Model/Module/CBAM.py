@@ -1,49 +1,73 @@
 import torch
+import math
 import torch.nn as nn
+import torch.nn.functional as F
 
-
-class ChannelAttention(nn.Module):
-    def __init__(self, in_planes, reduction_rate=16):
-        super(ChannelAttention, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-           
-        self.excitation  = nn.Sequential(nn.Conv2d(in_planes, in_planes // reduction_rate, 1, bias=False),
-                               nn.ReLU(inplace=True),
-                               nn.Conv2d(in_planes // reduction_rate, in_planes, 1, bias=False))
-        self.sigmoid = nn.Sigmoid()
+class BasicConv(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, groups=1, relu=True, bn=True, bias=False):
+        super(BasicConv, self).__init__()
+        self.out_channels = out_planes
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
+        self.bn = nn.BatchNorm2d(out_planes,eps=1e-5, momentum=0.01, affine=True) if bn else None
+        self.relu = nn.ReLU() if relu else None
 
     def forward(self, x):
-        avg_out = self.excitation (self.avg_pool(x))
-        max_out = self.excitation (self.max_pool(x))
-        out = avg_out + max_out
-        return self.sigmoid(out)
-
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-        self.conv = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
         x = self.conv(x)
-        return self.sigmoid(x)
-    
+        if self.bn is not None:
+            x = self.bn(x)
+        if self.relu is not None:
+            x = self.relu(x)
+        return x
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        return x.view(x.size(0), -1)
+
+class ChannelGate(nn.Module):
+    def __init__(self, in_ch, reduction_ratio=16):
+        super(ChannelGate, self).__init__()
+        self.in_ch = in_ch
+        self.mlp = nn.Sequential(
+            Flatten(),
+            nn.Linear(in_ch, in_ch // reduction_ratio),
+            nn.ReLU(),
+            nn.Linear(in_ch // reduction_ratio, in_ch)
+            )
+
+    def forward(self, x):
+        avg_pool = F.avg_pool2d( x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
+        avg_pool = self.mlp(avg_pool )
+        max_pool = F.max_pool2d( x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
+        max_pool = self.mlp(max_pool )
+        channel_att = avg_pool + max_pool
+        scale = F.sigmoid(channel_att).unsqueeze(2).unsqueeze(3).expand_as(x)
+        return x * scale
+
+class ChannelPool(nn.Module):
+    def forward(self, x):
+        return torch.cat( (torch.max(x,1)[0].unsqueeze(1), torch.mean(x,1).unsqueeze(1)), dim=1 )
+
+class SpatialGate(nn.Module):
+    def __init__(self):
+        super(SpatialGate, self).__init__()
+        kernel_size = 7
+        self.compress = ChannelPool()
+        self.spatial = BasicConv(2, 1, kernel_size, stride=1, padding=(kernel_size-1) // 2, relu=False)
+    def forward(self, x):
+        x_compress = self.compress(x)
+        x_out = self.spatial(x_compress)
+        scale = F.sigmoid(x_out) # broadcasting
+        return x * scale
 
 class CBAM(nn.Module):
-    def __init__(self, in_planes):
+    def __init__(self, in_ch, reduction_ratio=16, no_spatial=False):
         super(CBAM, self).__init__()
-        self.conv = nn.Conv2d(in_planes, in_planes, kernel_size=1)
-        self.ca = ChannelAttention(in_planes)
-        self.sa = SpatialAttention()
-        #self.conv_1 = nn.Conv2d(in_planes, in_planes, kernel_size=1)
-
+        self.ChannelGate = ChannelGate(in_ch, reduction_ratio)
+        self.no_spatial=no_spatial
+        if not no_spatial:
+            self.SpatialGate = SpatialGate()
     def forward(self, x):
-        x = self.conv(x)
-        x = self.ca(x)*x
-        x = self.sa(x)*x
-        #x = self.conv_1(x)
-        return x
+        x_out = self.ChannelGate(x)
+        if not self.no_spatial:
+            x_out = self.SpatialGate(x_out)
+        return x_out
