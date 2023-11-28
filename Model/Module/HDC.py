@@ -25,17 +25,15 @@ class DWConv(nn.Module):
         self.ca = CBAM(in_ch=out_ch)
         self.relu = nn.ReLU(inplace=True)
     def forward(self, x):
-        x_tmp = x
         x = self.conv1(x)
-        x = self.dwconv(x)
-        x = self.conv1_2(x)
+        x_tmp = self.dwconv(x)
+        x = self.conv1_2(x_tmp)
         x = self.ca(x) + x_tmp
         return x
 
 class SCBAM(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, rates):
         super(SCBAM, self).__init__()
-
         self.dilated_conv = []
         for i, rate in enumerate(rates):
             tmp = DWConv(in_channels, out_channels // len(rates), kernel_size, stride, rate)
@@ -48,8 +46,6 @@ class SCBAM(nn.Module):
         out = []
         for hdc in self.dilated_conv:
             out.append(hdc(x))
-        # for i in out:
-        #     print(i.size())
         combined_features = torch.cat(out, 1)
         output = self.bn(combined_features)
         output = self.relu(output)

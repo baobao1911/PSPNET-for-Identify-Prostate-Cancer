@@ -66,15 +66,7 @@ class PSP_CBAM_HDC(nn.Module):
 
         x_ppm = self.ppm(x)
         x_hdc = self.hdc(x)
-
-        x_att = self.conv_att(x)
-        x_chennal_att = self.chennal_att(x)*x_att
-        x_chennal_att = self.relu(x_chennal_att)
-        # x_chennal_att = F.interpolate(x_chennal_att, size=x.size()[2:], mode='bilinear', align_corners=True)
-
-        x = torch.cat([x_hdc, x_ppm, x_chennal_att], dim=1)
-
-        x = self.cbam(x)
+        x = torch.cat([x_hdc, x_ppm], dim=1)
         x = self.cls(x)
 
         if self.zoom_factor != 1:
