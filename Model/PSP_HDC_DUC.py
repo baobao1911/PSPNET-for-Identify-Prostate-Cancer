@@ -5,12 +5,17 @@ from Model.Backbone.Resnet101 import *
 from Model.Module.HDC import *
 from Model.Module.PPM import *
 
-def DUC(x, r, n_classes):
-    b, c, h, w = x.size()
-    
-    x = x.view(b, n_classes, r**2, h, w)
-    x = x.view(b, n_classes, h*r, w*r)
-    return x
+def DUC(x, zoom_factor, classes, b):
+    new_x = torch.zeros(b, 6, 304, 304)
+    classes = 6
+    r = zoom_factor
+    for i in range(0, 32):
+        for j in range(0, 32):
+            tmp = x[:,:, i:i+1, j:j+1]
+            tmp = tmp.view(b, classes, r**2, 1, 1)
+            tmp = tmp.view(b, classes, r, r)
+            new_x[:, :, i*r:i*r+r, j*r:j*r+r] = tmp
+    return new_x
 
 class PSP_HDC_DUC(nn.Module):
     def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
@@ -63,7 +68,7 @@ class PSP_HDC_DUC(nn.Module):
             )
 
     def forward(self, x, y=None):
-        _, _, h, w = x.size()
+        b, c, h, w = x.size()
 
         x = self.layer0(x)
         x = self.layer1(x)
@@ -76,7 +81,7 @@ class PSP_HDC_DUC(nn.Module):
         x = torch.cat([x_hdc, x_ppm], dim=1)
         x = self.cls(x)
 
-        x = DUC(x, self.zoom_factor, self.classes)
+        x = DUC(x, self.zoom_factor, self.classes, b)
         x = self.softmax(x)
         _, _, _, w4 = x.size()
         if w4 != w:
