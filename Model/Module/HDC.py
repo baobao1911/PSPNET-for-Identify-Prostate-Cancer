@@ -67,6 +67,7 @@ class HybridDilatedConv(nn.Module):
         effective_dilation = [rate * (kernel_size - 1) for rate in rates]
         p = [int((effective_dilation[i] - 1) / 2) for i in range(len(rates))]
         channel = int(in_channels//4)
+
         self.dilated_conv = []
         for i, rate in enumerate(rates):
             self.dilated_conv.append(nn.Conv2d(in_channels, channel, kernel_size, padding=p[i]+1, dilation=rate, bias=False))
@@ -76,11 +77,14 @@ class HybridDilatedConv(nn.Module):
         self.relu = nn.LeakyReLU(inplace=True)
 
     def forward(self, x):
+        outs = []
         for i, hdc in enumerate(self.dilated_conv):
-            if i == 0:
-                x = hdc(x)
-            else:
-                x = hdc(x)*x
+            x = hdc(x)
+            outs.append(x)
+        x = outs[0]
+        for i in range(1, len(outs)):
+            x *=outs[i]
+
         output = self.bn(x)
         output = self.relu(output)
         return output
