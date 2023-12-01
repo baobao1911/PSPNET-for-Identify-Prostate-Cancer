@@ -5,72 +5,83 @@ from Model.Backbone.Xception65 import *
 from Model.Module.CBAM import *
 
 
-class DWConv(nn.Module):
-    def __init__(self, in_ch, kernel_size, stride, dilation):
-        super(DWConv, self).__init__()
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_ch, int(in_ch//4), kernel_size=1),
-            nn.BatchNorm2d(int(in_ch//4)),
-            nn.ReLU(inplace=True)
+def _make_divisible(v, divisor, min_value=None):
+    if min_value is None:
+        min_value = divisor
+    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+    # Make sure that round down does not go down by more than 10%.
+    if new_v < 0.9 * v:
+        new_v += divisor
+    return new_v
+
+class SELayer(nn.Module):
+    def __init__(self, in_channels, out_channels, reduction=4):
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+                nn.Linear(out_channels, _make_divisible(in_channels // reduction, 8)),
+                nn.SiLU(),
+                nn.Linear(_make_divisible(in_channels // reduction, 8), out_channels),
+                nn.Sigmoid()
         )
-        self.dwconv = nn.Sequential(
-            SeparableConv2d(int(in_ch//4), int(in_ch//4), kernel_size=kernel_size, stride=stride, dilation=dilation, BatchNorm=nn.BatchNorm2d),
-            nn.BatchNorm2d(int(in_ch//4)),
-            nn.ReLU(inplace=True)
-        )
-        self.conv1_2 = nn.Sequential(
-            nn.Conv2d(int(in_ch//4), in_ch, kernel_size=1),
-            nn.BatchNorm2d(in_ch)
-        )
-        self.ca = CBAM(in_ch)
-        self.relu = nn.ReLU(inplace=True)
+
     def forward(self, x):
-        x_tmp = x
-        x = self.conv1(x)
-        x = self.dwconv(x)
-        x = self.conv1_2(x)
-        x = self.ca(x) + x_tmp
-        x = self.relu(x)
-        return x
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y
+class MBConv(nn.Module):
+    def __init__(self, in_channels, out_channels, stride, expand_ratio, rate):
+        super(MBConv, self).__init__()
+        assert stride in [1, 2]
 
-class SCBAM(nn.Module):
-    def __init__(self, in_channels, kernel_size, stride, rates):
-        super(SCBAM, self).__init__()
-        self.dilated_conv = []
-        self.dwconv = nn.Sequential(
-            nn.Conv2d(in_channels, int(in_channels//4), kernel_size=3, padding=1, stride=1, dilation=1, bias=False),
-            nn.BatchNorm2d(in_channels//4),
-            nn.ReLU(inplace=True)
+        hidden_dim = round(in_channels * expand_ratio)
+        self.identity = stride == 1 and in_channels == out_channels
+        self.conv = nn.Sequential(
+            # pw
+            nn.Conv2d(in_channels, hidden_dim, 1, 1, 0, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            nn.SiLU(),
+            # dw
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=stride, padding=rate, dilation=rate, groups=hidden_dim, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            nn.SiLU(),
+            
+            SELayer(in_channels, hidden_dim),
+            # pw-linear
+            nn.Conv2d(hidden_dim, out_channels, 1, 1, 0, bias=False),
+            nn.BatchNorm2d(out_channels),
         )
+    def forward(self, x):
+        if self.identity:
+            return x + self.conv(x)
+        else:
+            return self.conv(x)
 
-        for i, rate in enumerate(rates):
-            tmp = DWConv(int(in_channels//4), kernel_size, stride, rate)
+class HDC_MBConv(nn.Module):
+    def __init__(self, in_channels, stride, rates):
+        super(HDC_MBConv, self).__init__()
+        self.dilated_conv = []
+        for rate in rates:
+            tmp = MBConv(in_channels, in_channels, stride, 0.2, rate)
             self.dilated_conv.append(tmp)
         self.dilated_conv = nn.ModuleList(self.dilated_conv)
 
-        self.bn = nn.BatchNorm2d(int(in_channels//4))
-        self.relu = nn.ReLU(inplace=True)
-
     def forward(self, x):
-        x = self.dwconv(x)
         for hdc in self.dilated_conv:
-            x = hdc(x)*x
-
-        output = self.bn(x)
-        output = self.relu(output)
-        return output
+            x = hdc(x)
+        return x
 
 class HybridDilatedConv(nn.Module):
     def __init__(self, in_channels, kernel_size, rates):
         super(HybridDilatedConv, self).__init__()
 
-        effective_dilation = [rate * (kernel_size - 1) for rate in rates]
-        p = [int((effective_dilation[i] - 1) / 2) for i in range(len(rates))]
+
         channel = int(in_channels//4)
 
         self.dilated_conv = []
         for i, rate in enumerate(rates):
-            self.dilated_conv.append(nn.Conv2d(in_channels, channel, kernel_size, padding=p[i]+1, dilation=rate, bias=False))
+            self.dilated_conv.append(nn.Conv2d(in_channels, channel, kernel_size, padding=rate, dilation=rate, bias=False))
             in_channels = channel
         self.dilated_conv = nn.ModuleList(self.dilated_conv)
         self.bn = nn.BatchNorm2d(channel)
