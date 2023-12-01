@@ -63,7 +63,7 @@ class HDC_MBConv(nn.Module):
         super(HDC_MBConv, self).__init__()
         self.dilated_conv = []
         for rate in rates:
-            tmp = MBConv(in_channels, in_channels, stride, 0.2, rate)
+            tmp = MBConv(in_channels, stride, 0.2, rate)
             self.dilated_conv.append(tmp)
         self.dilated_conv = nn.ModuleList(self.dilated_conv)
 
@@ -72,30 +72,21 @@ class HDC_MBConv(nn.Module):
             x = hdc(x)
         return x
 
-class HybridDilatedConv(nn.Module):
-    def __init__(self, in_channels, kernel_size, rates):
-        super(HybridDilatedConv, self).__init__()
-
-
-        channel = int(in_channels//4)
-
-        self.dilated_conv = []
-        for i, rate in enumerate(rates):
-            self.dilated_conv.append(nn.Conv2d(in_channels, channel, kernel_size, padding=rate, dilation=rate, bias=False))
-            in_channels = channel
-        self.dilated_conv = nn.ModuleList(self.dilated_conv)
-        self.bn = nn.BatchNorm2d(channel)
-        self.relu = nn.LeakyReLU(inplace=True)
-
+class HDC(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, rates):
+        super(HDC, self).__init__()
+        self.dilated_conv = nn.ModuleList([])
+        for rate in rates:
+            self.dilated_conv.append(nn.Conv2d(in_channels, out_channels, kernel_size, padding=rate, dilation=rate, bias=False))
+            in_channels = out_channels
+        self.project = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.2)
+            )
     def forward(self, x):
-        outs = []
-        for i, hdc in enumerate(self.dilated_conv):
+        for hdc in self.dilated_conv:
             x = hdc(x)
-            outs.append(x)
-        x = outs[0]
-        for i in range(1, len(outs)):
-            x *=outs[i]
-
-        output = self.bn(x)
-        output = self.relu(output)
-        return output
+        x = self.project(x)
+        return x

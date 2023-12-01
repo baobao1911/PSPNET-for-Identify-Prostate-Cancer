@@ -7,7 +7,7 @@ import os
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Model.PSP_CBAM_HDC import PSP_CBAM_HDC
+from Model.PSPNet_X import PSPNet_X
 from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate
 
 ################################################################################################################################################
@@ -58,17 +58,18 @@ def model_training(train_img_path, train_mask_path,
     gamma=2
 
 
-    model = PSP_CBAM_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
-    modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.hdc, model.cls, model.aux]
+    model = PSPNet_X(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
+    modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4, model.layer5, model.layer6,
+                model.layer7, model.layer8, model.layer9, model.layer10, model.layer11, model.layer12, model.layer13]
+    modules_new = [model.ppm, model.hdc, model.cls, model.shallow_feature, model.segmentation, model.aux]
 
     params_list = []
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*3 ))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*5 ))
 
-    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=0.0005, momentum=0.9)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
 
     ep = 1
     scaler = torch.cuda.amp.GradScaler()
@@ -193,7 +194,7 @@ def model_training(train_img_path, train_mask_path,
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr*3
+            optimizer.param_groups[index]['lr'] = current_lr*5
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
@@ -206,7 +207,7 @@ def model_training(train_img_path, train_mask_path,
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_CBAM_HDC.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_X.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -225,12 +226,12 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_CBAM_HDC.csv'
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_X.csv'
     batch_s = 4
     n_workers = 6
     n_classes = 6
-    base_lr = 0.001
-    epochs = 100
+    base_lr = 0.01
+    epochs = 180
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
