@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from Model.Module.CBAM import *
 
 class PPM(nn.Module):
-    def __init__(self, in_dim, reduction_dim, bins):
+    def __init__(self, in_dim, reduction_dim, bins, attention=False):
         super(PPM, self).__init__()
         self.features = []
         for bin in bins:
@@ -14,9 +15,14 @@ class PPM(nn.Module):
                 nn.ReLU(inplace=True),
             ))
         self.features = nn.ModuleList(self.features)
+        self.attention = attention
+        if self.attention == True:
+            self.cbam = CBAM(in_dim)
 
     def forward(self, x):
         x_size = x.size()
+        if self.attention == True:
+            x = self.cbam(x)
         out = [x]
         for f in self.features:
             out.append(F.interpolate(f(x), x_size[2:], mode='bilinear', align_corners=True))

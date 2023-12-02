@@ -14,7 +14,7 @@ class PSPNet_X(nn.Module):
         self.zoom_factor = zoom_factor
         self.criterion = criterion
 
-        model = xception(pretrained=True, model_path=r'xxx')
+        model = xception(pretrained=True, model_path=r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Utils\xception-43020ad28.pth')
         self.layer0 = nn.Sequential(
             model.conv1, model.bn1, model.relu1,
             model.conv2, model.bn2, model.relu2
@@ -32,14 +32,14 @@ class PSPNet_X(nn.Module):
         self.layer11 = model.block11
         self.layer12 = model.block12
         self.layer13 = nn.Sequential(
-            x = model.conv3, x = model.bn3, x = model.relu3,
-            x = model.conv4, x = model.bn4
+            model.conv3, model.bn3, model.relu3,
+            model.conv4, model.bn4
         )
 
         fea_dim = 2048
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
         
-        self.hdc = HDC(fea_dim, 512, stride=1, rates=rates)
+        self.hdc = HDC(fea_dim, 512, kernel_size=3, rates=rates)
         fea_dim = fea_dim*2 + 512
 
         self.cls = nn.Sequential(
@@ -62,18 +62,18 @@ class PSPNet_X(nn.Module):
         )
         if self.training:
             self.aux = nn.Sequential(
-                nn.Conv2d(1024, 256, kernel_size=3, padding=1, bias=False),
-                nn.BatchNorm2d(256),
+                nn.Conv2d(128, 64, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True),
                 nn.Dropout2d(p=dropout),
-                nn.Conv2d(256, classes, kernel_size=1)
+                nn.Conv2d(64, classes, kernel_size=1)
             )
 
     def forward(self, x, y=None):
         _, _, h, w = x.size()
         x = self.layer0(x)
         x_tmp = self.layer1(x)
-        _, _, h4, w4 = x.size()
+        _, _, h4, w4 = x_tmp.size()
         shallow_features = self.shallow_feature(x_tmp)
         x = self.layer2(x_tmp)
         x = self.layer3(x)

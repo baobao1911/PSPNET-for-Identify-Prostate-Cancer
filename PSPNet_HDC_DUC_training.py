@@ -67,7 +67,7 @@ def model_training(train_img_path, train_mask_path,
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*3 ))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*5 ))
 
     optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=0.0005, momentum=0.9)
 
@@ -194,7 +194,7 @@ def model_training(train_img_path, train_mask_path,
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr*3
+            optimizer.param_groups[index]['lr'] = current_lr*5
 
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
@@ -230,8 +230,8 @@ if __name__ == "__main__":
     batch_s = 4
     n_workers = 6
     n_classes = 6
-    base_lr = 0.001
-    epochs = 100
+    base_lr = 0.01
+    epochs = 150
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True

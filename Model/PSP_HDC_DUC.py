@@ -5,17 +5,22 @@ from Model.Backbone.Resnet101 import *
 from Model.Module.HDC import *
 from Model.Module.PPM import *
 
-def DUC(x, zoom_factor, classes, b):
-    new_x = torch.zeros(b, 6, 304, 304)
-    classes = 6
-    r = zoom_factor
-    for i in range(0, 32):
-        for j in range(0, 32):
-            tmp = x[:,:, i:i+1, j:j+1]
-            tmp = tmp.view(b, classes, r**2, 1, 1)
-            tmp = tmp.view(b, classes, r, r)
-            new_x[:, :, i*r:i*r+r, j*r:j*r+r] = tmp
-    return new_x
+class DUC(nn.Module):
+    def __init__(self, classes, batch_size, zoom_factor):
+        super(DUC, self).__init__()
+        self.classes = classes
+        self.b = batch_size
+        self.r = zoom_factor
+    def forward(self, x):
+        new_x = torch.zeros(self.b, self.classes, 304, 304)
+        for i in range(0, 32):
+            for j in range(0, 32):
+                tmp = x[:,:, i:i+1, j:j+1]
+                tmp = tmp.view(self.b, self.classes, self.r**2, 1, 1)
+                tmp = tmp.view(self.b, self.classes, self.r, self.r)
+                new_x[:, :, i*self.r:i*self.r+self.r, j*self.r:j*self.r+self.r] = tmp
+        return new_x
+
 
 class PSP_HDC_DUC(nn.Module):
     def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
@@ -44,11 +49,10 @@ class PSP_HDC_DUC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        fea_dim_hdc = 256*len(rates)
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
-        self.hdc = SCBAM(fea_dim, fea_dim_hdc, kernel_size=3, stride=1, rates=rates)
+        self.hdc = HybridDilatedConv(fea_dim, kernel_size=3, rates=rates)
 
-        fea_dim = fea_dim*2 + fea_dim_hdc
+        fea_dim = fea_dim*2 + int(fea_dim//4)
         self.cls = nn.Sequential(
             nn.Conv2d(fea_dim, 512, kernel_size=1, padding=1, bias=False),
             nn.BatchNorm2d(512),
@@ -56,7 +60,7 @@ class PSP_HDC_DUC(nn.Module):
             nn.Dropout2d(p=dropout),
             nn.Conv2d(512, classes*zoom_factor**2, kernel_size=1)
         )
-        self.softmax = nn.Softmax(1) 
+        self.duc = DUC(classes, 4, zoom_factor)
 
         if self.training:
             self.aux = nn.Sequential(
@@ -66,7 +70,7 @@ class PSP_HDC_DUC(nn.Module):
                 nn.Dropout2d(p=dropout),
                 nn.Conv2d(256, classes, kernel_size=1)
             )
-
+    
     def forward(self, x, y=None):
         b, c, h, w = x.size()
 
@@ -81,8 +85,8 @@ class PSP_HDC_DUC(nn.Module):
         x = torch.cat([x_hdc, x_ppm], dim=1)
         x = self.cls(x)
 
-        x = DUC(x, self.zoom_factor, self.classes, b)
-        x = self.softmax(x)
+        x = self.duc(x.clone())
+        #x = self.softmax(x)
         _, _, _, w4 = x.size()
         if w4 != w:
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
