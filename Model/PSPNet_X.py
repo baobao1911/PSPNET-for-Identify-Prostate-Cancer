@@ -6,7 +6,7 @@ from Model.Module.PPM import PPM
 from Model.Module.HDC import *
 
 class PSPNet_X(nn.Module):
-    def __init__(self,bins=(1, 2, 3, 6), rates=[1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255)):
+    def __init__(self,bins=(1, 2, 4, 8), rates=[1, 2, 5], dropout=0.3, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255)):
         super(PSPNet_X, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
@@ -38,27 +38,17 @@ class PSPNet_X(nn.Module):
 
         fea_dim = 2048
         self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
-        
-        self.hdc = HDC(fea_dim, 512, kernel_size=3, rates=rates)
-        fea_dim = fea_dim*2 + 512
 
+
+        fea_dim = fea_dim*2
+
+        
         self.cls = nn.Sequential(
             nn.Conv2d(fea_dim, 512, kernel_size=1, padding=1, bias=False),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(p=dropout)
-        )
-        self.shallow_feature = nn.Sequential(
-            nn.Conv2d(128, 48, kernel_size=1, bias=False),
-            nn.BatchNorm2d(48),
-            nn.ReLU(inplace=True),
-        )
-        self.segmentation = nn.Sequential(
-            nn.Conv2d(512+48, 256, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
-            nn.Conv2d(256, classes, kernel_size=1)
+            nn.Conv2d(512, classes, kernel_size=1)
         )
         if self.training:
             self.aux = nn.Sequential(
@@ -73,8 +63,6 @@ class PSPNet_X(nn.Module):
         _, _, h, w = x.size()
         x = self.layer0(x)
         x_tmp = self.layer1(x)
-        _, _, h4, w4 = x_tmp.size()
-        shallow_features = self.shallow_feature(x_tmp)
         x = self.layer2(x_tmp)
         x = self.layer3(x)
         x = self.layer4(x)
@@ -88,13 +76,8 @@ class PSPNet_X(nn.Module):
         x = self.layer12(x)
         x = self.layer13(x)
 
-        x_ppm = self.ppm(x)
-        x_hdc = self.hdc(x)
-        x = torch.cat([x_ppm, x_hdc], 1)
+        x = self.ppm(x)
         x = self.cls(x)
-        x = F.interpolate(x, size=(h4, w4), mode='bilinear', align_corners=True)
-        x = torch.cat([x, shallow_features], 1)
-        x = self.segmentation(x)
 
         if self.zoom_factor != 1:
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)

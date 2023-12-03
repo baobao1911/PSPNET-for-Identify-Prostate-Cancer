@@ -61,7 +61,7 @@ def model_training(train_img_path, train_mask_path,
     model = PSPNet_X(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4, model.layer5, model.layer6,
                 model.layer7, model.layer8, model.layer9, model.layer10, model.layer11, model.layer12, model.layer13]
-    modules_new = [model.ppm, model.hdc, model.cls, model.shallow_feature, model.segmentation, model.aux]
+    modules_new = [model.ppm, model.cls, model.aux]
 
     params_list = []
     for module in modules_ori:
@@ -69,7 +69,7 @@ def model_training(train_img_path, train_mask_path,
     for module in modules_new:
         params_list.append(dict(params=module.parameters(), lr=base_lr*5 ))
 
-    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=5e-4, momentum=0.9)
 
     ep = 1
     scaler = torch.cuda.amp.GradScaler()
@@ -227,11 +227,11 @@ if __name__ == "__main__":
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
     result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_X.csv'
-    batch_s = 4
+    batch_s = 6
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
-    epochs = 180
+    epochs = 100
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True

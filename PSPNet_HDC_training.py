@@ -17,8 +17,8 @@ def model_training(train_img_path, train_mask_path,
                    epochs, base_lr, 
                    model_checkpint_path, result_path):
     # 1. Create dataset
-    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=304, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304, multi_scale=False)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=256, multi_scale=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256 , multi_scale=False)
     
 
 
@@ -60,13 +60,13 @@ def model_training(train_img_path, train_mask_path,
 
     model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.hdc, model.cls, model.aux]
+    modules_new = [model.ppm, model.reduce, model.pooling, model.fc, model.aux]
 
     params_list = []
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*5 ))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*5))
 
     optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=5e-4, momentum=0.9)
 
@@ -206,7 +206,7 @@ def model_training(train_img_path, train_mask_path,
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet2_HDC.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC2.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -225,12 +225,12 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet2_HDC.csv'
-    batch_s = 4
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC2.csv'
+    batch_s = 8
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
-    epochs = 100
+    epochs = 150
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True

@@ -30,63 +30,47 @@ class SELayer(nn.Module):
         y = self.avg_pool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
         return x * y
-class MBConv(nn.Module):
-    def __init__(self, in_channels, out_channels, stride, expand_ratio, rate):
-        super(MBConv, self).__init__()
-        assert stride in [1, 2]
+    
 
-        hidden_dim = round(in_channels * expand_ratio)
-        self.identity = stride == 1 and in_channels == out_channels
-        self.conv = nn.Sequential(
-            # pw
-            nn.Conv2d(in_channels, hidden_dim, 1, 1, 0, bias=False),
-            nn.BatchNorm2d(hidden_dim),
-            nn.SiLU(),
-            # dw
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=stride, padding=rate, dilation=rate, groups=hidden_dim, bias=False),
-            nn.BatchNorm2d(hidden_dim),
-            nn.SiLU(),
-            
-            SELayer(in_channels, hidden_dim),
-            # pw-linear
-            nn.Conv2d(hidden_dim, out_channels, 1, 1, 0, bias=False),
+
+class HDC_DWConv(nn.Module):
+    def __init__(self, in_channels, out_channels, stride, rates):
+        super(HDC_DWConv, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
         )
-    def forward(self, x):
-        if self.identity:
-            return x + self.conv(x)
-        else:
-            return self.conv(x)
-
-class HDC_MBConv(nn.Module):
-    def __init__(self, in_channels, stride, rates):
-        super(HDC_MBConv, self).__init__()
-        self.dilated_conv = []
+        
+        self.dilated_conv = nn.ModuleList([])
         for rate in rates:
-            tmp = MBConv(in_channels, stride, 0.2, rate)
-            self.dilated_conv.append(tmp)
-        self.dilated_conv = nn.ModuleList(self.dilated_conv)
+            self.dilated_conv.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False),
+                    nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=stride, padding=rate, dilation=rate, groups=out_channels, bias=False)
+                    )
+                )
+            in_channels = out_channels
 
     def forward(self, x):
+        conv = self.conv1(x)
         for hdc in self.dilated_conv:
             x = hdc(x)
-        return x
+        return torch.cat([x, conv], 1)
 
 class HDC(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, rates):
         super(HDC, self).__init__()
         self.dilated_conv = nn.ModuleList([])
         for rate in rates:
-            self.dilated_conv.append(nn.Conv2d(in_channels, out_channels, kernel_size, padding=rate, dilation=rate, bias=False))
-            in_channels = out_channels
-        self.project = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+            self.dilated_conv.append(nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size, padding=rate, dilation=rate, bias=False),
                 nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.2)
-            )
+                nn.ReLU(inplace=True))
+                )
+            in_channels = out_channels
+
     def forward(self, x):
-        for hdc in self.dilated_conv:
+        for i, hdc in enumerate(self.dilated_conv):
             x = hdc(x)
-        x = self.project(x)
         return x
