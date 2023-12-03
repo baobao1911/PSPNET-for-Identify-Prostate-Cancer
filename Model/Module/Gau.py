@@ -51,3 +51,63 @@ class GAU(nn.Module):
                 self.bn_reduction(self.conv_reduction(fms_high)) + fms_att)
 
         return out
+    
+from Model.Module.CBAM import *
+
+class GAU_Custom(nn.Module):
+    def __init__(self, channels_high, channels_low, bins, upsample=True):
+        super(GAU, self).__init__()
+        # Global Attention Upsample
+        self.conv3x3_low = nn.Sequential(
+            nn.Conv2d(channels_low, channels_low, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(channels_low),
+            nn.ReLU(inplace=True),
+        )
+
+        self.gpooling = nn.ModuleList([])
+        reduction_dim = int(channels_high/len(bins))
+        for bin in bins:
+            self.gpooling.append(nn.Sequential(
+                nn.AdaptiveAvgPool2d(bin),
+                nn.Conv2d(channels_high, reduction_dim, kernel_size=1, bias=False),
+                nn.BatchNorm2d(reduction_dim),
+                nn.ReLU(inplace=True),
+            ))
+        self.conv1 = nn.Sequential(
+            CBAM(channels_high, reduction_ratio=4),
+            nn.Conv2d(channels_high, reduction_dim, kernel_size=1, bias=False),
+            nn.BatchNorm2d(reduction_dim),
+            nn.ReLU(inplace=True)
+        )
+        self.conv1x1_high = nn.Sequential(
+                nn.Conv2d(reduction_dim*(len(bins)), channels_low, kernel_size=1, bias=False),
+                nn.BatchNorm2d(channels_low),
+                nn.ReLU(inplace=True)
+        )
+        self.conv_out = nn.Sequential(
+            nn.Conv2d(channels_low*2, channels_low, kernel_size=1, bias=False),
+            nn.BatchNorm2d(channels_low),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1)
+        )
+        if upsample:
+            self.relu = nn.ReLU(inplace=True)
+            self.conv_upsample = nn.ConvTranspose2d(channels_high, channels_low, kernel_size=4, stride=2, padding=1, bias=False)
+            self.bn_upsample = nn.BatchNorm2d(channels_low)
+        self.upsample = upsample
+
+    def forward(self, high, low):
+        high_branchs = []
+        for f in self.gpooling:
+            high_branchs.append(F.interpolate(f(high), high.size()[2:], mode='bilinear', align_corners=True))
+        high_branchs = torch.cat(high_branchs, 1)
+        high_branchs = self.conv1x1_high(high_branchs)
+
+        high_branchs = F.interpolate(high_branchs, low.size()[2:], mode='bilinear', align_corners=True)
+
+        low_branchs = self.conv3x3_low(low)
+
+        out = self.conv_out(torch.cat([low_branchs, high_branchs], 1))
+        if self.upsample:
+            out = self.relu(self.bn_upsample(self.conv_upsample(high)) + out)
+        return out

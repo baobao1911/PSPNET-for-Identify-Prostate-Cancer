@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from Model.Backbone.Resnet101 import *
 from Model.Module.HDC import *
 from Model.Module.PPM import *
-
+from Model.Module.Gau import *
 
 class PSPNet_HDC(nn.Module):
     def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1 ,2, 5], dropout=0.25, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
@@ -34,23 +34,32 @@ class PSPNet_HDC(nn.Module):
         fea_dim = 2048
         self.ppm = PPM_custom(fea_dim, int(fea_dim/len(bins)), bins, rates)
 
-
-        self.reduce = nn.Sequential(
-            nn.Conv2d(256, 48, kernel_size=1, bias=False),
-            nn.BatchNorm2d(48),
-            nn.ReLU(inplace=True)
-        )
-        fea_dim = int(fea_dim/len(bins)) + 48
-        self.pooling= PPM(fea_dim, int(fea_dim/len(bins)), bins)
-
-        fea_dim *=2
+        self.gau1 = GAU_Custom(int(fea_dim/len(bins)), 512, bins, upsample=True)
+        self.gau2 = GAU_Custom(512, 256, bins, upsample=True)
         self.fc = nn.Sequential(
-                nn.Conv2d(fea_dim, 256, kernel_size=3, padding=1, bias=False),
+                nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(256),
                 nn.ReLU(inplace=True),
                 nn.Dropout2d(p=dropout),
                 nn.Conv2d(256, classes, kernel_size=1)
             )
+
+        # self.reduce = nn.Sequential(
+        #     nn.Conv2d(256, 48, kernel_size=1, bias=False),
+        #     nn.BatchNorm2d(48),
+        #     nn.ReLU(inplace=True)
+        # )
+        # fea_dim = int(fea_dim/len(bins)) + 48
+        # self.pooling= PPM(fea_dim, int(fea_dim/len(bins)), bins)
+
+        # fea_dim *=2
+        # self.fc = nn.Sequential(
+        #         nn.Conv2d(fea_dim, 256, kernel_size=3, padding=1, bias=False),
+        #         nn.BatchNorm2d(256),
+        #         nn.ReLU(inplace=True),
+        #         nn.Dropout2d(p=dropout),
+        #         nn.Conv2d(256, classes, kernel_size=1)
+        #     )
         
         if self.training:
             self.aux = nn.Sequential(
@@ -65,18 +74,20 @@ class PSPNet_HDC(nn.Module):
         _, _, h, w = x.size()
 
         x = self.layer0(x)
-        x_tmp = self.layer1(x)
-        reduce = self.reduce(x_tmp)
+        x1 = self.layer1(x)
+#        reduce = self.reduce(x_tmp)
 
-        x = self.layer2(x_tmp)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x2 = self.layer2(x1)
+        x3 = self.layer3(x2)
+        x4 = self.layer4(x3)
         
-        x = self.ppm(x)
-        x = F.interpolate(x, size=reduce.size()[2:], mode='bilinear', align_corners=True)
+        x = self.ppm(x4)
+        x = self.gau1(x, x2)
+        x = self.gau2(x, x1)
+        # x = F.interpolate(x, size=reduce.size()[2:], mode='bilinear', align_corners=True)
 
-        x = torch.cat([x, reduce], 1)
-        x = self.pooling(x)
+        # x = torch.cat([x, reduce], 1)
+        # x = self.pooling(x)
 
         x = self.fc(x)
 
@@ -84,7 +95,7 @@ class PSPNet_HDC(nn.Module):
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
 
         if self.training:
-            aux = self.aux(x_tmp)
+            aux = self.aux(x1)
             if self.zoom_factor != 1:
                 aux = F.interpolate(aux, size=(h, w), mode='bilinear', align_corners=True)
             main_loss = self.criterion(x, y)
