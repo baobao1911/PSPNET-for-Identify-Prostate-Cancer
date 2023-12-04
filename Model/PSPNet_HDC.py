@@ -34,8 +34,8 @@ class PSPNet_HDC(nn.Module):
         fea_dim = 2048
         self.ppm = PPM_custom(fea_dim, int(fea_dim/len(bins)), bins, rates)
 
-        self.gau1 = GAU_Custom(int(fea_dim/len(bins)), 512, bins, upsample=True)
-        self.gau2 = GAU_Custom(512, 256, bins, upsample=True)
+        self.gau1 = GAU(int(fea_dim/len(bins)), 512, upsample=True)
+        self.gau2 = GAU(512, 256, upsample=True)
         self.fc = nn.Sequential(
                 nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(256),

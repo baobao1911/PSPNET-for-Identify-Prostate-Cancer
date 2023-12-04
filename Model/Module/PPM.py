@@ -21,7 +21,7 @@ class PPM_custom(nn.Module):
     def __init__(self, in_dim, reduction_dim, bins, rates):
         super(PPM_custom, self).__init__()
         self.protect_x = nn.Sequential(
-                CBAM(in_dim, reduction_ratio=4),
+                #CBAM(in_dim, reduction_ratio=4),
                 nn.Conv2d(in_dim, reduction_dim, kernel_size=1, bias=False)
         )
 
