@@ -60,7 +60,7 @@ def model_training(train_img_path, train_mask_path,
 
     model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.reduce, model.pooling, model.fc, model.aux]
+    modules_new = [model.ppm, model.gau1, model.gau2, model.fc, model.aux]
 
     params_list = []
     for module in modules_ori:
@@ -79,7 +79,7 @@ def model_training(train_img_path, train_mask_path,
                                 map_location = lambda storage, loc: storage.cuda(dev))     
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        ep = checkpoint["epoch"]
+        ep = 150
         scaler.load_state_dict(checkpoint["scaler"])
         epochs = ep + epochs
         ep +=1
@@ -206,7 +206,7 @@ def model_training(train_img_path, train_mask_path,
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC2.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC3.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -217,7 +217,7 @@ def model_training(train_img_path, train_mask_path,
     print('Total training time {}'.format(total_time_str))
 
 if __name__ == "__main__":
-    model_checkpint_path = None
+    model_checkpint_path = None#r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC2.pth'
 
     train_img_path  = r'D:\University\MyProject\Data\traindata\image1024'
     train_mask_path = r'D:\University\MyProject\Data\traindata\mask1024'
@@ -225,12 +225,12 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC2.csv'
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC3.csv'
     batch_s = 8
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
-    epochs = 150
+    epochs = 200
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True

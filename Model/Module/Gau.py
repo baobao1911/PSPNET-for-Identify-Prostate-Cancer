@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from Model.Module.CBAM import *
 
 
 class GAU(nn.Module):
@@ -52,11 +53,11 @@ class GAU(nn.Module):
 
         return out
     
-from Model.Module.CBAM import *
+
 
 class GAU_Custom(nn.Module):
     def __init__(self, channels_high, channels_low, bins, upsample=True):
-        super(GAU, self).__init__()
+        super(GAU_Custom, self).__init__()
         # Global Attention Upsample
         self.conv3x3_low = nn.Sequential(
             nn.Conv2d(channels_low, channels_low, kernel_size=3, padding=1, bias=False),
