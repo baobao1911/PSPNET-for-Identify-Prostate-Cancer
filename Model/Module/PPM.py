@@ -10,18 +10,20 @@ class SeparableConv2d(nn.Module):
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=bias)
         self. bn = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
+        self.cbam = CBAM(out_channels, reduction_ratio=4)
     def forward(self,x):
         x = self.conv1(x)
         x = self.pointwise(x)
         x = self.bn(x)
         x = self.relu(x)
+        x = self.cbam(x)
         return x
 
 class PPM_custom(nn.Module):
     def __init__(self, in_dim, reduction_dim, bins, rates):
         super(PPM_custom, self).__init__()
         self.protect_x = nn.Sequential(
-                #CBAM(in_dim, reduction_ratio=4),
+                CBAM(in_dim, reduction_ratio=4),
                 nn.Conv2d(in_dim, reduction_dim, kernel_size=1, bias=False)
         )
 
@@ -29,6 +31,7 @@ class PPM_custom(nn.Module):
         for bin in bins:
             self.pooling.append(nn.Sequential(
                 nn.AdaptiveAvgPool2d(bin),
+                CBAM(in_dim, reduction_ratio=4),
                 nn.Conv2d(in_dim, reduction_dim, kernel_size=1, bias=False),
                 nn.BatchNorm2d(reduction_dim),
                 nn.ReLU(inplace=True),

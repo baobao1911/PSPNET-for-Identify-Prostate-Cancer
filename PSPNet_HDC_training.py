@@ -18,7 +18,7 @@ def model_training(train_img_path, train_mask_path,
                    model_checkpint_path, result_path):
     # 1. Create dataset
     train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=256, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256 , multi_scale=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256, multi_scale=False)
     
 
 
@@ -60,7 +60,7 @@ def model_training(train_img_path, train_mask_path,
 
     model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.gau1, model.gau2, model.fc, model.aux]
+    modules_new = [model.ppm, model.gau2, model.fc, model.aux]
 
     params_list = []
     for module in modules_ori:
@@ -195,6 +195,9 @@ def model_training(train_img_path, train_mask_path,
         for index in range(len(modules_ori), len(optimizer.param_groups)):
             optimizer.param_groups[index]['lr'] = current_lr*5
 
+        if epoch % 10 == 0 and epoch > 130 :
+            base_lr *= 0.6
+
         data = [train_loss, train_mIou, train_mAcc, train_allAcc, val_loss, val_mIou, val_mAcc, val_allAcc]
         with open(result_path, mode='w', newline='') as file:
             writer = csv.writer(file)
@@ -206,7 +209,7 @@ def model_training(train_img_path, train_mask_path,
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC3.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC7.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -225,8 +228,8 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC3.csv'
-    batch_s = 8
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet_HDC7.csv'
+    batch_s = 4
     n_workers = 6
     n_classes = 6
     base_lr = 0.01

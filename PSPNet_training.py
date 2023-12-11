@@ -17,8 +17,8 @@ def model_training(train_img_path, train_mask_path,
                    epochs, base_lr, 
                    model_checkpint_path, result_path):
     # 1. Create dataset
-    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=304, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=304)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=256, multi_scale=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256)
     
 
 
@@ -230,8 +230,8 @@ if __name__ == "__main__":
     batch_s = 6
     n_workers = 6
     n_classes = 6
-    base_lr = 0.01
-    epochs = 100
+    base_lr = 0.005
+    epochs = 200
 
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
