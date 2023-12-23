@@ -27,15 +27,18 @@ class PSPNet_HDC(nn.Module):
         #         m.stride = (1, 1)
         for n, m in self.layer4.named_modules():
             if 'conv2' in n:
-                m.dilation, m.padding, m.stride = (2, 2), (2, 2), (1, 1) #(4, 4), (4, 4), (1, 1)
+                m.dilation, m.padding, m.stride = (2, 2), (2, 2), (1, 1)#(4, 4), (4, 4), (1, 1)
             elif 'downsample.0' in n:
                 m.stride = (1, 1)
 
         fea_dim = 2048
         self.ppm = PPM_custom(fea_dim, int(fea_dim/len(bins)), bins, rates)
+
         fea_dim = int(fea_dim/len(bins))
+
         self.gau1 = GAU(fea_dim, 512)
-        self.gau2 = GAU(fea_dim, 256)
+        self.gau2 = GAU(512, 256)
+
         self.fc = nn.Sequential(
                nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
                nn.BatchNorm2d(256),
@@ -62,9 +65,9 @@ class PSPNet_HDC(nn.Module):
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
         
-        x = self.ppm(x4)
-        x = self.gau1(x, x2)
-        x = self.gau2(x, x1)
+        x = self.ppm(x4) #/16
+        x = self.gau1(x, x2) #/8
+        x = self.gau2(x, x1) #/4
 
         x = self.fc(x)
 
