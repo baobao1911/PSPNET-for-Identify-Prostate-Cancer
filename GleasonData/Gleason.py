@@ -16,7 +16,7 @@ COLORMAP = [
 
 ]
 
-def get_transforms(image=None, mask=None, train=False, test=False, base_size=304, multi_scale=False):
+def get_transforms(image=None, mask=None, train=False, test=False, base_size=256, multi_scale=False):
     if multi_scale == True:
         min_size = 256
         max_size = 481
@@ -25,7 +25,6 @@ def get_transforms(image=None, mask=None, train=False, test=False, base_size=304
     if train == False:
         Transform = albu.Compose([
             albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
-
             albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
             ToTensorV2(),
             ])
@@ -33,12 +32,11 @@ def get_transforms(image=None, mask=None, train=False, test=False, base_size=304
         Transform = albu.Compose([
             albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
 
-            albu.Superpixels(p_replace=0.1, n_segments=128, interpolation=cv2.INTER_NEAREST, p=0.7),
+            albu.Superpixels(p_replace=0.1, n_segments=128, interpolation=cv2.INTER_NEAREST, p=0.5),
             albu.HorizontalFlip(p=0.5),
-            albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.7, border_mode=0),
+            albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
             albu.VerticalFlip(p=0.5),
-            albu.PadIfNeeded(min_height=256, min_width=256, always_apply=True, border_mode=0),
-
+            albu.PadIfNeeded(min_height=256, min_width=256, border_mode=0),
             albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
             ToTensorV2(),
             ])
@@ -50,6 +48,7 @@ def get_transforms(image=None, mask=None, train=False, test=False, base_size=304
         sample = Transform(image=image)
         image = sample['image']
         return image
+    
 class Gleason(Dataset):
     """Gleason Dataset. Read images, apply augmentation and preprocessing transformations.
 
@@ -64,10 +63,10 @@ class Gleason(Dataset):
 
     """
 
-    """CLASSES = ['background', 'Begin', 'Gleason score 5', 'Gleason score 3', 'Gleason score 4']"""
-    """CLASSES = ['0', '1', '2', '3', '4']"""
+    """CLASSES = ['background', 'Begin', 'Gleason score 3', 'Gleason score 4', 'Gleason score 5']"""
+    """CLASSES = ['0', '1', '3', '4', '5']"""
 
-    def __init__(self, images_dir, masks_dir, tranforms=False, train=False, test=False, base_size=304, multi_scale=False):
+    def __init__(self, images_dir, masks_dir, tranforms=False, train=False, test=False, base_size=256, multi_scale=False):
         self.img_list = os.listdir(images_dir)
         self.images_fps = [os.path.join(images_dir, image_id) for image_id in self.img_list]
 
@@ -92,11 +91,6 @@ class Gleason(Dataset):
             return image
 
         mask = cv2.imread(self.masks_fps[i], 0)
-        # mask = Image.open(self.masks_fps[i])
-        # # extract certain classes from mask (e.g. cars)
-        # masks = [(mask == v) for v in self.class_values]
-        # mask = np.stack(masks, axis=-1).astype('float')
-
         # apply tranfrom
         if self.get_tranforms == True:
             image, mask = get_transforms(image=image, mask=mask, train=self.train, test=self.test, base_size=self.size, multi_scale=self.multi_scale)

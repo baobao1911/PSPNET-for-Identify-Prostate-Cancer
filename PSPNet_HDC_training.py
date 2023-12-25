@@ -7,7 +7,7 @@ import os
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Model.PSPNet_HDC import PSPNet_HDC
+from Model.PSPNet_Custom import PSPNet_HDC
 from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate
 
 ################################################################################################################################################

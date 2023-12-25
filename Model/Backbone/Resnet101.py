@@ -7,10 +7,10 @@ model_urls = {
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'
 }
 
-def conv3x3(in_planes, out_planes, stride=1):
+def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3,
+        stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
 
 
 class BasicBlock(nn.Module):
@@ -47,15 +47,17 @@ class BasicBlock(nn.Module):
 
 class Bottleneck(nn.Module):
     expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, groups = 1, base_width = 64, dilation=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
+        width = int(planes * (base_width / 64.0)) * groups
+
+        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(width)
+
+        self.conv2 = conv3x3(width, width, stride, groups, dilation)
+        self.bn2 = nn.BatchNorm2d(width)
+
+        self.conv3 = nn.Conv2d(width, planes * self.expansion, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -162,7 +164,9 @@ def resnet101(pretrained=False, model_path=None, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
-    if pretrained and model_path is not None:
+    if pretrained==True and model_path is not None:
         # model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
+        kwargs['groups'] = 32
+        kwargs['width_per_group'] = 8
         model.load_state_dict(torch.load(model_path), strict=False)
     return model

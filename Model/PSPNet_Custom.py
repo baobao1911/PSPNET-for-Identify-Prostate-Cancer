@@ -2,20 +2,21 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from Model.Backbone.Resnet101 import *
-from Model.Module.HDC import *
 from Model.Module.PPM import *
 from Model.Module.Gau import *
 
-class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 6, 12, 18], dropout=0.25, classes=6, zoom_factor=16, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
-        super(PSPNet_HDC, self).__init__()
+class PSPNet_Custom(nn.Module):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[[1, 6, 12, 18],[1, 2, 5, 1, 2, 5]], 
+                 dropout=0.25, classes=6, zoom_factor=16, 
+                 criterion=nn.CrossEntropyLoss(ignore_index=255), 
+                 pretrained=True, Backbone_path='Utils'):
+        super(PSPNet_Custom, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
         self.zoom_factor = zoom_factor
         self.criterion = criterion
 
-        resnet_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Utils\resnet101-cd907fc2.pth'
-        resnet = resnet101(pretrained=pretrained, model_path=resnet_path)
+        resnet = resnet101(pretrained=pretrained, model_path=Backbone_path)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 
@@ -31,7 +32,7 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        self.ppm = PPM_AS(fea_dim, int(fea_dim/len(bins)), bins, rates)
+        self.ppm = PPM_Custom(fea_dim, int(fea_dim/len(bins)), bins, rates[0], use_SeparableConv=True, add_hdc=False, add_asp=True)
 
         fea_dim = int(fea_dim/len(bins))
 

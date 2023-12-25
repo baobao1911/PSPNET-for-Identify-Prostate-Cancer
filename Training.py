@@ -7,12 +7,14 @@ import os
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Model.PSPNet_HDC import PSPNet_HDC
+from Model.PSPNet_Custom import PSPNet_HDC
 from Model.PSPNet import PSPNet
 from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate
 
-def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_classes, batch_s, modules_new, modules_ori, base_lr, epoch, epochs, train_log, alpha=0.25, gamma=2):
-    # 5. Begin training
+def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_classes, batch_s, 
+                         modules_new, modules_ori, base_lr, epoch, epochs, train_log, 
+                         alpha=0.25, gamma=2):
+    # Begin training
     print(f'>> Start Training .............')
     main_loss_meter = AverageMeter()
     total_loss = AverageMeter()
@@ -67,7 +69,6 @@ def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_
         t_mAcc = np.mean(t_accuracy_class)
         t_allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)     
         print(f'[Train Result] main loss: {main_loss_meter.avg:.4f}, mIoU: {t_mIoU:.4f}, total loss: {total_loss.avg:.4}, mAcc: {t_mAcc:.4f}, allAcc: {t_allAcc:.4f}')
-
         train_log['train_loss'].append(main_loss_meter.avg)
         train_log['train_mIou'].append(round(t_mIoU, 3))
         train_log['train_mAcc'].append(round(t_mAcc, 3))
@@ -108,13 +109,13 @@ def validation(model, device, val_data_loader, loss_fn, batch_s, n_classes, val_
 def training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_fn, device, n_classes, 
                      scaler, batch_s, epochs, train_data_loader, val_data_loader, 
                      result_file='result_long.csv', model_path='save_model.pth', retrain=False, model_checkpint_path=None,
-                     alpha=2, gamma=0.25, ep = 1):
+                     alpha=2, gamma=0.25):
     # Begin training
     result_log = {
             'train_loss' : [], 'train_mIou' : [], 'train_mAcc': [], 'train_allAcc' : [],
             'val_loss' : [], 'val_mIou' : [], 'val_mAcc' :[], 'val_allAcc' : [],
     }
-
+    ep = 0
     if retrain == True and model_checkpint_path is not None:
         dev = torch.cuda.current_device()
         checkpoint = torch.load(model_checkpint_path, 
@@ -126,7 +127,6 @@ def training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_f
         epochs = ep + epochs
         ep +=1
         print('>> loading information....')
-
         data = np.genfromtxt(result_file, delimiter=',', dtype=float)
         result_log['train_loss'] = data[0].tolist()
         result_log['train_mIou'] = data[1].tolist()
@@ -138,33 +138,33 @@ def training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_f
         result_log['val_mAcc'] = data[6].tolist()
         result_log['val_allAcc'] = data[7].tolist()
 
-    start_time = time.time()
-    for epoch in range(ep, epochs+2):
-        print(f'Current >> [epoch: {epoch}/ {epochs}, LR: {optimizer.param_groups[0]["lr"]:.8f}]')
 
+    start_time = time.time()
+    for epoch in range(ep, epochs):
+        print(f'Current >> [epoch: {epoch}/ {epochs}, LR: {optimizer.param_groups[0]["lr"]:.8f}]')
         training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_classes, batch_s, 
                              modules_new, modules_ori, base_lr, epoch, epochs, result_log, alpha, gamma)
-
         validation(model, device, val_data_loader, loss_fn, batch_s, n_classes, result_log)
 
         # Writing to CSV
-        with open(result_file, 'w', newline='') as file:
+        with open(f'Training_result/Result_info/{result_file}', 'w', newline='') as file:
             writer = csv.writer(file)
             # Write each key and its values as a row
             for key, values in result_log.items():
                 row = values
                 writer.writerow(row)
 
-        if epoch == 1 or (result_log['val_loss'][-1] <= min(result_log['val_loss'][:-1])):
+        # Save best weight model
+        if epoch == 0 or (result_log['val_loss'][-1] <= min(result_log['val_loss'][:-1])):
             checkpoint = {"model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
                 "scaler": scaler.state_dict()
             }
-            if os.path.exists(model_path):
-                os.remove(model_path)  # You can also use os.unlink(file_path)
+            if os.path.exists(f'Training_result/ModelSave/{model_path}'):
+                os.remove(f'Training_result/ModelSave/{model_path}')
             print(f'---> Update best model')
-            torch.save(checkpoint, model_path)
+            torch.save(checkpoint, f'Training_result/ModelSave/{model_path}')
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -186,25 +186,29 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
                             num_workers=n_workers, persistent_workers=True, 
                             drop_last=True, pin_memory=True)
     
-
+    # Set base learning rate for each paremeters
     params_list = []
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
         params_list.append(dict(params=module.parameters(), lr=base_lr*10))
 
+
+    # Define Optimizer and Automatic Mixed Precision for training process
     optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
     scaler = torch.cuda.amp.GradScaler()
 
+    # Start training
     training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_fn, device, 
-                     n_classes, scaler, batch_s, epochs, train_data_loader, val_data_loader, result_file, save_model, retrain, model_checkpint_path)
+                     n_classes, scaler, batch_s, epochs, train_data_loader, val_data_loader, 
+                     result_file, save_model, retrain, model_checkpint_path)
     
 
 if __name__ == "__main__":
     retrain = False
     model_checkpint_path = None
-    result_file = 'Training_result/Result_info/PSPNet_HDC_9.csv'
-    save_model = 'Training_result/ModelSave/PSPNet_HDC_9.pth'
+    result_file = 'PSPNet_HDC_9.csv'
+    save_model = 'PSPNet_HDC_9.pth'
 
 
 
