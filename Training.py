@@ -14,7 +14,7 @@ from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly
 def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_classes, batch_s, modules_new, modules_ori, base_lr, epoch, epochs, train_log, alpha=0.25, gamma=2):
     # 5. Begin training
     print(f'>> Start Training .............')
-    main_loss = AverageMeter()
+    main_loss_meter = AverageMeter()
     total_loss = AverageMeter()
     intersection_meter = AverageMeter()
     union_meter = AverageMeter()
@@ -54,7 +54,7 @@ def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_
             optimizer.param_groups[index]['lr'] = current_lr* 10
 
         with torch.no_grad():
-            main_loss.update(focal_loss_main.item(), batch_s)
+            main_loss_meter.update(focal_loss_main.item(), batch_s)
             total_loss.update(loss.item(), batch_s)
             intersection, union, target = intersectionAndUnionGPU(output.float(), target.float(), n_classes, 255)
             intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
@@ -66,9 +66,9 @@ def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_
         t_mIoU = np.mean(t_iou_class)
         t_mAcc = np.mean(t_accuracy_class)
         t_allAcc = sum(intersection_meter.sum) / (sum(target_meter.sum) + 1e-10)     
-        print(f'[Train Result] main loss: {main_loss.avg:.4f}, mIoU: {t_mIoU:.4f}, total loss: {total_loss.avg:.4}, mAcc: {t_mAcc:.4f}, allAcc: {t_allAcc:.4f}')
+        print(f'[Train Result] main loss: {main_loss_meter.avg:.4f}, mIoU: {t_mIoU:.4f}, total loss: {total_loss.avg:.4}, mAcc: {t_mAcc:.4f}, allAcc: {t_allAcc:.4f}')
 
-        train_log['train_loss'].append(main_loss.avg)
+        train_log['train_loss'].append(main_loss_meter.avg)
         train_log['train_mIou'].append(round(t_mIoU, 3))
         train_log['train_mAcc'].append(round(t_mAcc, 3))
         train_log['train_allAcc'].append(round(t_allAcc, 3))
@@ -112,7 +112,7 @@ def training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_f
     # Begin training
     result_log = {
             'train_loss' : [], 'train_mIou' : [], 'train_mAcc': [], 'train_allAcc' : [],
-            'val_loss' : [], 'val_mIou' : [], 'val_mAcc ' :[], 'val_allAcc' : [],
+            'val_loss' : [], 'val_mIou' : [], 'val_mAcc' :[], 'val_allAcc' : [],
     }
 
     if retrain == True and model_checkpint_path is not None:
@@ -191,7 +191,7 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*5))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*10))
 
     optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
     scaler = torch.cuda.amp.GradScaler()
@@ -202,9 +202,9 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
 
 if __name__ == "__main__":
     retrain = False
-    model_checkpint_path = None#r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet_HDC2.pth'
-    result_file = 'Training_result/Result_info/save_file.csv'
-    save_model = 'Training_result/Save_model/model.pth'
+    model_checkpint_path = None
+    result_file = 'Training_result/Result_info/PSPNet_HDC_9.csv'
+    save_model = 'Training_result/ModelSave/PSPNet_HDC_9.pth'
 
 
 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    batch_s = 12
+    batch_s = 8
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
 
-    model = PSPNet_HDC(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
+    model = PSPNet_HDC(classes=n_classes, zoom_factor=16, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
     modules_new = [model.ppm, model.gau1, model.gau2, model.fc, model.aux]
 

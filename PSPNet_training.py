@@ -17,8 +17,8 @@ def model_training(train_img_path, train_mask_path,
                    epochs, base_lr, 
                    model_checkpint_path, result_path):
     # 1. Create dataset
-    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=256, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=384, multi_scale=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=384)
     
 
 
@@ -207,7 +207,7 @@ def model_training(train_img_path, train_mask_path,
                 "scaler": scaler.state_dict()
             }
 
-            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet.pth'
+            file_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\ModelSave\PSPNet2.pth'
             if os.path.exists(file_path):
                 os.remove(file_path)  # You can also use os.unlink(file_path)
             print(f'Update best model file')
@@ -226,8 +226,8 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet.csv'
-    batch_s = 6
+    result_path = r'D:\University\Semantic_Segmentation_for_Prostate_Cancer_Detection\Semantic_Segmentation_for_Prostate_Cancer_Detection\Training_result\Result_info\PSPNet2.csv'
+    batch_s = 4
     n_workers = 6
     n_classes = 6
     base_lr = 0.005

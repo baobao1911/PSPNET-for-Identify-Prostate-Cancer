@@ -13,7 +13,7 @@ class SeparableConv2d(nn.Module):
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=bias)
         self.bn = nn.BatchNorm2d(out_channels)
         self.silu = nn.SiLU(inplace=True)
-        self.dropout = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(0.2)
         
     def forward(self,x):
         x = self.cbam(x)
@@ -82,7 +82,7 @@ class Conv2D(nn.Module):
 
 class PPM_AS(nn.Module):
     def __init__(self, in_dim, reduction_dim, bins, rates):
-        super(PPM_custom, self).__init__()
+        super(PPM_AS, self).__init__()
 
         self.pooling = nn.ModuleList([])
         for bin in bins:

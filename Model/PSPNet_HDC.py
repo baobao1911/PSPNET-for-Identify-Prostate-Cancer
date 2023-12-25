@@ -7,11 +7,10 @@ from Model.Module.PPM import *
 from Model.Module.Gau import *
 
 class PSPNet_HDC(nn.Module):
-    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 2, 5, 1 ,2, 5], dropout=0.25, classes=6, zoom_factor=8, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
+    def __init__(self, bins=(1, 2, 3, 6), rates=[1, 6, 12, 18], dropout=0.25, classes=6, zoom_factor=16, criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=True):
         super(PSPNet_HDC, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
-        assert zoom_factor in [1, 2, 4, 8]
         self.zoom_factor = zoom_factor
         self.criterion = criterion
 
@@ -32,7 +31,7 @@ class PSPNet_HDC(nn.Module):
                 m.stride = (1, 1)
 
         fea_dim = 2048
-        self.ppm = PPM_custom(fea_dim, int(fea_dim/len(bins)), bins, rates)
+        self.ppm = PPM_AS(fea_dim, int(fea_dim/len(bins)), bins, rates)
 
         fea_dim = int(fea_dim/len(bins))
 
