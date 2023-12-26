@@ -58,3 +58,20 @@ def Collate_fn(batch):
     batched_imgs = Cat_list(images, fill_value=255)
     batched_targets = Cat_list(targets, fill_value=0)
     return batched_imgs, batched_targets
+
+class UnNormalize(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+        
+    def __call__(self, tensor):
+        """
+        Args:
+            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
+        Returns:
+            Tensor: Normalized image.
+        """
+        for t, m, s in zip(tensor, self.mean, self.std):
+            t.mul_(s).add_(m)
+            # The normalize code -> t.sub_(m).div_(s)
+        return tensor
