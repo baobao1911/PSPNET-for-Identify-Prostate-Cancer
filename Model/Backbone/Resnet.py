@@ -4,9 +4,7 @@ import torch.nn as nn
 
 def conv3x3(in_planes, out_planes, stride = 1, groups = 1, dilation = 1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-        padding=dilation, groups=groups, bias=False, dilation=dilation
-    )
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation )
 
 
 def conv1x1(in_planes, out_planes, stride = 1):
@@ -22,8 +20,7 @@ class Bottleneck(nn.Module):
     # https://ngc.nvidia.com/catalog/model-scripts/nvidia:resnet_50_v1_5_for_pytorch.
 
     expansion = 4
-    def __init__(
-        self, inplanes, planes, stride = 1, downsample = None, groups = 1, base_width = 64, dilation = 1, norm_layer = None):
+    def __init__(self, inplanes, planes, stride = 1, downsample = None, groups = 1, base_width = 64, dilation = 1, norm_layer = None):
         super(Bottleneck, self).__init__()
 
         if norm_layer is None:
@@ -116,11 +113,12 @@ class ResNet(nn.Module):
                 norm_layer(planes * block.expansion),
             )
 
+        #inplanes, planes, stride = 1, downsample = None, groups = 1, base_width = 64, dilation = 1, norm_layer = None
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups, self.base_width, norm_layer))
+        layers.append(block(self.inplanes, planes, stride, downsample, self.groups, self.base_width, 1, norm_layer))
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups, base_width=self.base_width, dilation=self.dilation, norm_layer=norm_layer))
+            layers.append(block(inplanes=self.inplanes, planes=planes, groups=self.groups, base_width=self.base_width, dilation=self.dilation, norm_layer=norm_layer))
         return nn.Sequential(*layers)
 
     def _forward_impl(self, x):
@@ -129,11 +127,16 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
+        print(x.size())
 
         x = self.layer1(x)
+        print(x.size())
         x = self.layer2(x)
+        print(x.size())
         x = self.layer3(x)
+        print(x.size())
         x = self.layer4(x)
+        print(x.size())
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
@@ -150,8 +153,14 @@ def resnet101(pretrained=False, model_path=None):
         model.load_state_dict(torch.load(model_path), strict=False)
     return model
 
-def resnext101_64x4d(pretrained=False, model_path=None):
-    model = ResNet(Bottleneck, [3, 4, 23, 3], groups=64, width_per_group=4)
+def resnext101_32x8d(pretrained=False, model_path=None):
+    model = ResNet(Bottleneck, [3, 4, 23, 3], groups=32, width_per_group=8)
+    if pretrained==True and model_path is not None:
+        model.load_state_dict(torch.load(model_path), strict=False)
+    return model
+
+def resnext50_32x4d(pretrained=False, model_path=None):
+    model = ResNet(Bottleneck, [3, 4, 6, 3], groups=32, width_per_group=4)
     if pretrained==True and model_path is not None:
         model.load_state_dict(torch.load(model_path), strict=False)
     return model

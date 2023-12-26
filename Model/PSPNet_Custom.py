@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from Model.Backbone.Resnet101 import *
+from Model.Backbone.Resnet import *
 from Model.Module.PPM import *
 from Model.Module.Gau import *
 
@@ -16,7 +16,7 @@ class PSPNet_Custom(nn.Module):
         self.zoom_factor = zoom_factor
         self.criterion = criterion
 
-        resnet = resnet101(pretrained=pretrained, model_path=Backbone_path)
+        resnet = resnext50_32x4d(pretrained=pretrained, model_path=Backbone_path)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
 
