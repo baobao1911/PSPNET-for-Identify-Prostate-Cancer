@@ -7,7 +7,7 @@ import os
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from Model.PSPNet_Custom import PSPNet_HDC
+from Model.PSPNet_Custom import PSPNet_Custom
 from Model.PSPNet import PSPNet
 from Utils.utils import intersectionAndUnionGPU, Get_dataset, AverageMeter, poly_learning_rate
 
@@ -207,8 +207,8 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
 if __name__ == "__main__":
     retrain = False
     model_checkpint_path = None
-    result_file = 'PSPNet_HDC_9.csv'
-    save_model = 'PSPNet_HDC_9.pth'
+    result_file = 'PSPNet_Custom10.csv'
+    save_model = 'PSPNet_Custom10.pth'
 
 
 
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    batch_s = 8
+    batch_s = 6
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
 
-    model = PSPNet_HDC(classes=n_classes, zoom_factor=16, criterion=loss_fn).to(device)
+    model = PSPNet_Custom(classes=n_classes, zoom_factor=16, criterion=loss_fn, pretrained=True, Backbone_path=r'Utils\resnext50_32x4d-1a0047aa.pth').to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
     modules_new = [model.ppm, model.gau1, model.gau2, model.fc, model.aux]
 

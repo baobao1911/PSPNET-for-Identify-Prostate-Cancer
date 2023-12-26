@@ -128,7 +128,7 @@ class PPM_Custom(nn.Module):
         if self.skip:
             self.skip_x = nn.Sequential(
                 CBAM(in_dim, reduction_ratio=16),
-                Conv2D(in_dim, reduction_dim, kernel_size=1, padding=0, dilation=1))
+                Conv2D(in_dim, reduction_dim, kernel_size=1, padding=0, dilation=1, bias=False))
             decode_dim +=reduction_dim
         else:
             decode_dim +=in_dim
