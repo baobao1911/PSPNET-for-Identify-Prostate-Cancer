@@ -9,13 +9,13 @@ class PSPNet_Custom(nn.Module):
     def __init__(self, bins=(1, 2, 3, 6), rates=[[1, 6, 12, 18],[1, 2, 5, 1, 2, 5]], 
                  dropout=0.25, classes=6, zoom_factor=16, 
                  criterion=nn.CrossEntropyLoss(ignore_index=255), 
-                 pretrained=True, Backbone_path='Utils'):
+                 pretrained=True):
         super(PSPNet_Custom, self).__init__()
         assert 2048 % len(bins) == 0
         assert classes > 1
         self.zoom_factor = zoom_factor
         self.criterion = criterion
-
+        Backbone_path = r'Utils\resnext50_32x4d-1a0047aa.pth'
         resnet = resnext50_32x4d(pretrained=pretrained, model_path=Backbone_path)
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
