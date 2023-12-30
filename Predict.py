@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import cv2
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 
 from GleasonData.Gleason import *
 from Model.PSPNet_Custom import PSPNet_Custom
@@ -15,33 +16,32 @@ def build_testing(model, device, img_path, base_size=384):
     # Calculate the new dimensions for the cropped image
     new_height = np.shape(image)[0] // sliding_window
     new_width = np.shape(image)[1] // sliding_window
-    predict_mask = np.zeros((base_size*sliding_window, base_size*sliding_window))
-    print(predict_mask.shape)
     model.eval()
-    h_sub = 0
-    w_sub = 0
+    predict_list = []
+    image_list = []
+    position = []
     for h in range(0, np.shape(image)[0] - new_height+1, new_height):
         for w in range(0, np.shape(image)[1] - new_width+1, new_width):
             sub_image = image[h:h+new_height, w:w+new_width]
+            image_list.append(sub_image)
             sub_image = get_transforms(image=sub_image, train=False, test=True,  base_size=base_size, multi_scale=False)
-            
-            sub_mask_predict = model().to(device)).argmax(dim=1).squeeze().cpu().numpy()
-            predict_mask[h_sub:h_sub+base_size, w_sub:w_sub+base_size] = sub_mask_predict
-            w_sub +=base_size
-        h_sub+=base_size
-        w_sub = 0
-    print(np.unique(predict_mask))
+            sub_mask_predict = model(sub_image.unsqueeze(0).to(device)).argmax(dim=1).squeeze().cpu().numpy()
+            sub_mask_predict[sub_mask_predict == 2] = 0
+            predict_list.append(sub_mask_predict)
+            position.append([h, w])
 
-
-    return image, predict_mask
+    return image_list, predict_list, position
 
 def show_mask(image, predict_mask):
+    custom_cmap = ListedColormap(['gray', 'green', 'black', 'blue', 'yellow', 'red'])
+
+
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     fig.tight_layout(pad=3)
-
+    print(np.unique(predict_mask))
     ax[0].imshow(image)
     ax[0].set_title('Image')
-    ax[1].imshow(predict_mask, cmap='jet')
+    ax[1].imshow(predict_mask, cmap=custom_cmap, vmin=0, vmax=5)
     plt.show()
     
 if __name__ == "__main__":

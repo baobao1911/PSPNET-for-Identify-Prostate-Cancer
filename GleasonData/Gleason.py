@@ -66,12 +66,12 @@ class Gleason(Dataset):
     """CLASSES = ['background', 'Begin', 'Gleason score 3', 'Gleason score 4', 'Gleason score 5']"""
     """CLASSES = ['0', '1', '3', '4', '5']"""
 
-    def __init__(self, images_dir, masks_dir, tranforms=False, train=False, test=False, base_size=256, multi_scale=False):
+    def __init__(self, images_dir, masks_dir=None, tranforms=False, train=False, test=False, base_size=256, multi_scale=False):
         self.img_list = os.listdir(images_dir)
         self.images_fps = [os.path.join(images_dir, image_id) for image_id in self.img_list]
-
-        self.mask_list = [item.replace('.jpg', '_classimg_nonconvex.png') for item in self.img_list]
-        self.masks_fps = [os.path.join(masks_dir, image_id) for image_id in self.mask_list]
+        if masks_dir is not None:
+            self.mask_list = [item.replace('.jpg', '_classimg_nonconvex.png') for item in self.img_list]
+            self.masks_fps = [os.path.join(masks_dir, image_id) for image_id in self.mask_list]
 
         # convert str names to class values on masks
         self.class_values = [0, 1, 3, 4, 5]

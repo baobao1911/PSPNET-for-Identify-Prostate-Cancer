@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import Model.Backbone.Resnet101 as models
+import Model.Backbone.Resnet as models
 from Model.Module.PPM import PPM
 
 class PSPNet(nn.Module):

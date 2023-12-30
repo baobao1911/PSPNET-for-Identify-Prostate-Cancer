@@ -53,7 +53,7 @@ def training_each_epochs(model, optimizer, train_data_loader, device, scaler, n_
         for index in range(0, len(modules_ori)):
             optimizer.param_groups[index]['lr'] = current_lr
         for index in range(len(modules_ori), len(optimizer.param_groups)):
-            optimizer.param_groups[index]['lr'] = current_lr* 10
+            optimizer.param_groups[index]['lr'] = current_lr* 5
 
         with torch.no_grad():
             main_loss_meter.update(focal_loss_main.item(), batch_s)
@@ -113,30 +113,30 @@ def training_process(model, modules_new, modules_ori, optimizer, base_lr, loss_f
     # Begin training
     result_log = {
             'train_loss' : [], 'train_mIou' : [], 'train_mAcc': [], 'train_allAcc' : [],
-            'val_loss' : [], 'val_mIou' : [], 'val_mAcc' :[], 'val_allAcc' : [],
+            'val_loss' : [], 'val_mIou' : [], 'val_mAcc' :[], 'val_allAcc' : []
     }
     ep = 0
     if retrain == True and model_checkpint_path is not None:
         dev = torch.cuda.current_device()
-        checkpoint = torch.load(model_checkpint_path, 
+        checkpoint = torch.load(f'Training_result/ModelSave/{model_checkpint_path}', 
                                 map_location = lambda storage, loc: storage.cuda(dev))     
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        ep.load_state_dict(checkpoint["epoch"])
+        ep = checkpoint["epoch"]
         scaler.load_state_dict(checkpoint["scaler"])
-        epochs = ep + epochs
+        epochs += ep
         ep +=1
-        print('>> loading information....')
-        data = np.genfromtxt(result_file, delimiter=',', dtype=float)
-        result_log['train_loss'] = data[0].tolist()
-        result_log['train_mIou'] = data[1].tolist()
-        result_log['train_mAcc'] = data[2].tolist()
-        result_log['train_allAcc'] = data[3].tolist()
+        # print('>> loading information....')
+        # data = np.genfromtxt(f'Training_result/Result_info/{result_file}', delimiter=',', dtype=float)
+        # result_log['train_loss'] = data[0].tolist()
+        # result_log['train_mIou'] = data[1].tolist()
+        # result_log['train_mAcc'] = data[2].tolist()
+        # result_log['train_allAcc'] = data[3].tolist()
 
-        result_log['val_loss'] = data[4].tolist()
-        result_log['val_mIou'] = data[5].tolist()
-        result_log['val_mAcc'] = data[6].tolist()
-        result_log['val_allAcc'] = data[7].tolist()
+        # result_log['val_loss'] = data[4].tolist()
+        # result_log['val_mIou'] = data[5].tolist()
+        # result_log['val_mAcc'] = data[6].tolist()
+        # result_log['val_allAcc'] = data[7].tolist()
 
 
     start_time = time.time()
@@ -175,8 +175,8 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
                    retrain=False, model_checkpint_path=None):
 
     # Create dataset
-    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=384, multi_scale=False)
-    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=384, multi_scale=False)
+    train_dataset = Get_dataset(train_img_path, train_mask_path, tranforms=True, train=True, test=False, base_size=256, multi_scale=False)
+    val_dataset = Get_dataset(val_img_path, val_mask_path, tranforms=True, train=False, test=False, base_size=256, multi_scale=False)
     
     # Create data loaders
     train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_s, shuffle=True,
@@ -191,11 +191,11 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
     for module in modules_ori:
         params_list.append(dict(params=module.parameters(), lr=base_lr))
     for module in modules_new:
-        params_list.append(dict(params=module.parameters(), lr=base_lr*10))
+        params_list.append(dict(params=module.parameters(), lr=base_lr*5))
 
 
     # Define Optimizer and Automatic Mixed Precision for training process
-    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=1e-4, momentum=0.9)
+    optimizer =  torch.optim.SGD(params_list, lr=base_lr, weight_decay=2e-4, momentum=0.9)
     scaler = torch.cuda.amp.GradScaler()
 
     # Start training
@@ -206,19 +206,19 @@ def build_training(model, device, modules_new, modules_ori, base_lr, loss_fn, tr
 
 if __name__ == "__main__":
     retrain = False
-    model_checkpint_path = None
-    result_file = 'PSPNet_Custom10.csv'
-    save_model = 'PSPNet_Custom10.pth'
+    model_checkpint_path = None#r'Training_result\ModelSave\PSPNet_Custom10.pth'
+    result_file = 'PSPNet_4.csv'
+    save_model = 'PSPNet_4.pth'
 
 
 
-    train_img_path  = r'D:\University\MyProject\Data\traindata\image1024'
-    train_mask_path = r'D:\University\MyProject\Data\traindata\mask1024'
+    train_img_path  = r'd:\University\MyProject\Data\traindata\image1024'
+    train_mask_path = r'd:\University\MyProject\Data\traindata\mask1024'
 
     val_img_path  = r'D:\University\MyProject\Data\valdata\image1024'
     val_mask_path = r'D:\University\MyProject\Data\valdata\mask1024'
 
-    batch_s = 6
+    batch_s = 4
     n_workers = 6
     n_classes = 6
     base_lr = 0.01
@@ -231,9 +231,9 @@ if __name__ == "__main__":
     class_weights = torch.tensor([0.71527965, 0.77025329, 0, 0.82428098, 1.10154846, 30.43413])
     loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean').to(device)
 
-    model = PSPNet_Custom(classes=n_classes, zoom_factor=16, criterion=loss_fn, pretrained=True, Backbone_path=r'Utils\resnext50_32x4d-1a0047aa.pth').to(device)
+    model = PSPNet(classes=n_classes, zoom_factor=8, criterion=loss_fn).to(device)
     modules_ori = [model.layer0, model.layer1, model.layer2, model.layer3, model.layer4]
-    modules_new = [model.ppm, model.gau1, model.gau2, model.fc, model.aux]
+    modules_new = [model.ppm, model.cls, model.aux]
 
 
     torch.backends.cudnn.allow_tf32 = True
