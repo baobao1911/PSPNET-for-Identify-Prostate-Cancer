@@ -18,11 +18,10 @@ Data used in this challenge consists of a set of tissue micro-array (TMA) images
 
 ## Proposed Model
 
-## Result training
+## Comparison on validation test
 
-On validatin test
 
-| model | mIou |
-| ------------- | ------------- |
-| Pspnet  | 0.657  |
-| Ours  | 0.703  |
+<img src='https://github.com/baobao1911/Prostate-Cancer-Segmentation-from-pathology-images/blob/main/Loss_on_validation.png' width='600' height=400>
+<img src='https://github.com/baobao1911/Prostate-Cancer-Segmentation-from-pathology-images/blob/main/Mean_IoU_on_validation.png' width='600' height=400>
+
+
