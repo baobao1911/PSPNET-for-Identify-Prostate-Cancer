@@ -1,8 +1,7 @@
 import os
 import cv2
 import numpy as np
-from PIL import Image
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 import albumentations as albu
 from albumentations.pytorch import ToTensorV2
 
@@ -10,91 +9,81 @@ CLASSES = [0, 1, 2, 3, 4]
 COLORMAP = [
     [0, 0, 102],   # background
     [0, 255, 0],     # green
-    [255, 0, 0],     # red
     [0, 0, 255],     # blue
     [255, 255, 0],   # yellow
-
+    [255, 0, 0],     # red
 ]
+class CFG:
+    train_bs      = 64
+    valid_bs      = train_bs*2
+    img_size      = [256, 256]
+    epochs        = 100
+    n_workers     = 2
 
-def get_transforms(image=None, mask=None, train=False, test=False, base_size=256, multi_scale=False):
-    if multi_scale == True:
-        min_size = 256
-        max_size = 481
-        base_size = np.random.randint(low=min_size, high=max_size)
-        
-    if train == False:
-        Transform = albu.Compose([
-            albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
-            albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
-            ToTensorV2(),
-            ])
-    else:
-        Transform = albu.Compose([
-            albu.Resize(width=base_size, height=base_size, always_apply=True, interpolation=cv2.INTER_NEAREST, p=1),
-
-            albu.Superpixels(p_replace=0.1, n_segments=128, interpolation=cv2.INTER_NEAREST, p=0.5),
-            albu.HorizontalFlip(p=0.5),
-            albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
-            albu.VerticalFlip(p=0.5),
-            albu.PadIfNeeded(min_height=256, min_width=256, border_mode=0),
-            albu.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0),
-            ToTensorV2(),
-            ])
-    if test == False:
-        sample = Transform(image=image, mask=mask)
-        image, mask = sample['image'], sample['mask']
-        return image, mask
-    else:
-        sample = Transform(image=image)
-        image = sample['image']
-        return image
+data_transforms = {
+    "train": albu.Compose([
+        albu.Resize(*CFG.img_size, interpolation=cv2.INTER_LINEAR, p=1, always_apply=True),
+        albu.HorizontalFlip(p=0.5),
+#         albu.VerticalFlip(p=0.5),
+        albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.05, rotate_limit=10, p=0.5),
+        albu.OneOf([
+            albu.GridDistortion(num_steps=5, distort_limit=0.05, p=1.0),
+# #             albu.OpticalDistortion(distort_limit=0.05, shift_limit=0.05, p=1.0),
+            albu.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0)
+        ], p=0.25),
+        ToTensorV2(),
+        ], p=1.0),
     
-class Gleason(Dataset):
-    """Gleason Dataset. Read images, apply augmentation and preprocessing transformations.
-
-    Args:
-        images_dir (str): path to images folder
-        masks_dir (str): path to segmentation masks folder
-        class_values (list): values of classes to extract from segmentation mask
-        augmentation (albumentations.Compose): data transfromation pipeline
-            (e.g. flip, scale, etc.)
-        preprocessing (albumentations.Compose): data preprocessing
-            (e.g. noralization, shape manipulation, etc.)
-
-    """
-
-    """CLASSES = ['background', 'Begin', 'Gleason score 3', 'Gleason score 4', 'Gleason score 5']"""
-    """CLASSES = ['0', '1', '3', '4', '5']"""
-
-    def __init__(self, images_dir, masks_dir=None, tranforms=False, train=False, test=False, base_size=256, multi_scale=False):
+    "valid": albu.Compose([
+        albu.Resize(*CFG.img_size, interpolation=cv2.INTER_LINEAR, p=1, always_apply=True),
+        #ToTensorV2(),
+        ], p=1.0)
+}
+class Gleason():
+    def __init__(self, images_dir, masks_dir=None, transforms=None):
+        self.images_dir = images_dir
+        self.masks_dir = masks_dir
+        
         self.img_list = os.listdir(images_dir)
-        self.images_fps = [os.path.join(images_dir, image_id) for image_id in self.img_list]
+        self.img_list.sort()
         if masks_dir is not None:
-            self.mask_list = [item.replace('.jpg', '_classimg_nonconvex.png') for item in self.img_list]
-            self.masks_fps = [os.path.join(masks_dir, image_id) for image_id in self.mask_list]
-
-        # convert str names to class values on masks
-        self.class_values = [0, 1, 3, 4, 5]
-        self.get_tranforms = tranforms
-        self.train = train
-        self.test = test
-        self.size = base_size
-        self.multi_scale = multi_scale
-
-    def __getitem__(self, i):
-        # read data
-        image = cv2.imread(self.images_fps[i])
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # image = Image.open(self.images_fps[i])
-        if self.test:
-            image = get_transforms(image=image, train=False, test=True,  base_size=self.size, multi_scale=self.multi_scale)
-            return image
-
-        mask = cv2.imread(self.masks_fps[i], 0)
-        # apply tranfrom
-        if self.get_tranforms == True:
-            image, mask = get_transforms(image=image, mask=mask, train=self.train, test=self.test, base_size=self.size, multi_scale=self.multi_scale)
-        return image, mask
-
+            self.mask_list = os.listdir(masks_dir)
+            self.mask_list.sort()
+        self.transforms = transforms
+        
     def __len__(self):
         return len(self.img_list)
+
+    def __getitem__(self, i):
+        print(self.img_list[i])
+        print(self.mask_list[i])
+        img = cv2.imread(f'{self.images_dir}/{self.img_list[i]}', 1)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)   
+        img = np.array(img, np.float32)     
+        img /=255.0
+        if self.masks_dir is not None:
+            msk = cv2.imread(f'{self.masks_dir}/{self.mask_list[i]}', cv2.IMREAD_GRAYSCALE) 
+            if self.transforms:
+                data = self.transforms(image=img, mask=msk)
+                img  = data['image']
+                msk  = data['mask']
+            return img, msk
+        else:
+            if self.transforms:
+                data = self.transforms(image=img)
+                img  = data['image']
+            return img
+        
+def prepare_loaders(train_img=None, train_mask=None, 
+                    valid_img=None, valid_mask=None,
+                    img_size=[256, 256], n_workers=2):
+    CFG.img_size = img_size
+    CFG.n_workers = n_workers
+    train_dataset = Gleason(train_img, train_mask, transforms=data_transforms['train'])
+    train_loader = DataLoader(train_dataset, batch_size=CFG.train_bs, 
+                            num_workers=CFG.n_workers, shuffle=True, pin_memory=True, drop_last=True)
+
+    valid_dataset = Gleason(valid_img, valid_mask, transforms=data_transforms['valid'])
+    valid_loader = DataLoader(valid_dataset, batch_size=CFG.valid_bs, 
+                            num_workers=CFG.n_workers, shuffle=False, pin_memory=True)
+    return train_loader, valid_loader
