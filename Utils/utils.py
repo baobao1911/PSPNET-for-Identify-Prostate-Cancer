@@ -1,9 +1,9 @@
 import torch
-from GleasonData.Gleason import Gleason
-import cv2
 import numpy as np
-from PIL import  Image
+import torch.optim as optim
 
+
+    
 def intersectionAndUnionGPU(output, target, K, ignore_index=255):
     # 'K' classes, output and target sizes are N or N * L or N * H * W, each value in range 0 to K - 1.
     assert output.shape == target.shape
@@ -15,16 +15,15 @@ def intersectionAndUnionGPU(output, target, K, ignore_index=255):
     area_output = torch.histc(output, bins=K, min=0, max=K-1)
     area_target = torch.histc(target, bins=K, min=0, max=K-1)
     area_union = area_output + area_target - area_intersection
-    return area_intersection, area_union, area_target
+    return area_intersection, area_union, area_target, area_output
 
-def Get_dataset(img_path, mask_path, tranforms=False, train=False, test=False,  base_size=304, multi_scale=False):
-    dataset = Gleason(img_path, mask_path, tranforms=tranforms, train=train, test=test, base_size=base_size, multi_scale=multi_scale)
-    return dataset
+def IoU(area_intersection, area_union, smooth= 1e-10):
+    iou = area_intersection / (area_union + smooth)
+    return np.mean(iou)
 
-def poly_learning_rate(base_lr, curr_iter, max_iter, power=0.9):
-    """poly learning rate policy"""
-    lr = base_lr * (1 - float(curr_iter) / max_iter) ** power
-    return lr
+def Dice(area_intersection, area_target, area_output, smooth=1e-10):
+    dice = (2*area_intersection)/(area_output + area_target + smooth)
+    return np.mean(dice)
 
 
 class AverageMeter(object):
@@ -43,35 +42,15 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-
-def Cat_list(images, fill_value=0):
-    max_size = tuple(max(s) for s in zip(*[img.shape for img in images]))
-    batch_shape = (len(images),) + max_size
-    batched_imgs = images[0].new(*batch_shape).fill_(fill_value)
-    for img, pad_img in zip(images, batched_imgs):
-        pad_img[..., :img.shape[-2], :img.shape[-1]].copy_(img)
-    return batched_imgs
-
-
-def Collate_fn(batch):
-    images, targets = list(zip(*batch))
-    batched_imgs = Cat_list(images, fill_value=255)
-    batched_targets = Cat_list(targets, fill_value=0)
-    return batched_imgs, batched_targets
-
-class UnNormalize(object):
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-        
-    def __call__(self, tensor):
-        """
-        Args:
-            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
-        Returns:
-            Tensor: Normalized image.
-        """
-        for t, m, s in zip(tensor, self.mean, self.std):
-            t.mul_(s).add_(m)
-            # The normalize code -> t.sub_(m).div_(s)
-        return tensor
+def fetch_scheduler(optimizer, scheduler, epochs, max_iter):
+    if scheduler == 'PolicyLR':
+        try:
+            scheduler = optim.lr_scheduler.LambdaLR(optimizer, 
+                                    lambda x: (1 - x / (max_iter * epochs)) ** 0.9)
+        except ValueError:
+            raise ValueError("check number train_loader")
+    elif scheduler == "ReduceLROnPlateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5)
+    else:
+        return None
+    return scheduler
